@@ -24,6 +24,9 @@ class UserOut(BaseModel):
     email: str # email already validated 
     is_verified: bool
 
+    class Config:
+        from_attributes = True  
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
