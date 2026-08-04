@@ -1,9 +1,10 @@
 from fastapi import Depends
 from fastapi import APIRouter, HTTPException
 from app.core.database import SessionLocal
+from app.core.security import create_access_token
 from app.models.user import User 
-from app.schemas.user import UserCreate, UserOut
-from app.services.auth_service import hash_password 
+from app.schemas.user import UserCreate, UserOut, LoginRequest, LoginResponse
+from app.services.auth_service import hash_password, verify_password 
 import secrets
 from datetime import datetime, timedelta 
  
@@ -71,3 +72,15 @@ def resend_verification(body: dict, db = Depends(get_db)):
     user.token_expires_at = datetime.now() + timedelta(hours=24)
     db.commit()
     return {"status": "new token sent"}
+
+@router.post("/login", response_model = LoginResponse)
+def login(credentials: LoginRequest, db = Depends(get_db)):
+    user = db.query(User).filter(User.email == credentials.email).first() 
+    if not user or not verify_password(credentials.password, user.hashed_password):
+        raise HTTPException(status_code = 401, detail = "Invalid credentials")
+
+    if not user.is_verified:
+        raise HTTPException(status_code = 403, detail = "Please verify your email first")
+
+    access_token = create_access_token({"sub": str(user.id)})
+    return {"access_token": access_token, "token_type": "bearer"}
