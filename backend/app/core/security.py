@@ -1,7 +1,12 @@
 from datetime import datetime,timedelta
 from app.core.config import settings
 from jose import jwt
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from app.core.database import get_db
+from app.models.user import User
 
+security = HTTPBearer()
 
 # Creates a login token (JWT) when user logs in successfully.
 def create_access_token(data: dict) -> str:
@@ -30,3 +35,13 @@ def create_verification_token() -> str:
 # Checks if a datetime is in the past (token expired).
 def is_token_expired(expiry: datetime) -> bool:
     return expiry < datetime.now()
+
+# Extract the user from the JWT token in the request header for protected routes
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db = Depends(get_db)):
+        token = credentials.credentials
+        payload = verify_token(token)  # raises exception if invalid/expired
+        user_id = payload.get("sub")
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code = 401, detail = "User not found")
+        return user
