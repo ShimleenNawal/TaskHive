@@ -1,7 +1,7 @@
 from fastapi import Depends
 from fastapi import APIRouter, HTTPException
-from app.core.database import SessionLocal
-from app.core.security import create_access_token
+from app.core.database import get_db
+from app.core.security import create_access_token, get_current_user
 from app.models.user import User 
 from app.schemas.user import UserCreate, UserOut, LoginRequest, LoginResponse
 from app.services.auth_service import hash_password, verify_password 
@@ -10,13 +10,6 @@ from datetime import datetime, timedelta
  
 
 router = APIRouter(prefix = "/auth", tags = ["auth"])
-
-def get_db():
-    db = SessionLocal() # create a connection to database 
-    try:
-        yield db # waiting for others to use it 
-    finally:
-        db.close() # makes sure to close the connection even if error
 
 @router.post("/signup", response_model = UserOut)
 def signup(user_data: UserCreate, db = Depends(get_db)):
@@ -84,3 +77,7 @@ def login(credentials: LoginRequest, db = Depends(get_db)):
 
     access_token = create_access_token({"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/users/me", response_model = UserOut)
+def get_profile(current_user: User = Depends(get_current_user)):
+    return current_user
