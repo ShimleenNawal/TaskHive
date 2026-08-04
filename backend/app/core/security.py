@@ -23,23 +23,13 @@ def verify_token(token: str) -> dict:
         return payload
     except jwt.JWTError:
         return None
-
-# Creates a verification token for email verification (signup flow).
-def create_verification_token() -> str:
-    to_encode = {"sub": "verification"}
-    expire = datetime.now() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-    return encoded_jwt
-
-# Checks if a datetime is in the past (token expired).
-def is_token_expired(expiry: datetime) -> bool:
-    return expiry < datetime.now()
-
+        
 # Extract the user from the JWT token in the request header for protected routes
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db = Depends(get_db)):
         token = credentials.credentials
         payload = verify_token(token)  # raises exception if invalid/expired
+        if not payload:
+            raise HTTPException(status_code=401, detail = "Invalid or expired token")
         user_id = payload.get("sub")
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
