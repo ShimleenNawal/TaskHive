@@ -40,3 +40,34 @@ def signup(user_data: UserCreate, db = Depends(get_db)):
     db.commit()
     db.refresh(new_user) 
     return new_user
+
+@router.get("/verify")
+def verify_email(token: str, db = Depends(get_db)):
+    user = db.query(User).filter(User.verification_token == token).first() 
+    if not user:
+        raise HTTPException(status_code = 404, detail = "Token not found")
+
+    if datetime.now() > user.token_expires_at:
+            raise HTTPException(status_code = 400, detail = "Token expired")
+
+    user.is_verified = True
+    user.verification_token = None
+    user.token_expires_at = None
+    db.commit()
+    return {"status": "verified"}
+
+@router.post("/resend-verification")
+def resend_verification(body: dict, db = Depends(get_db)):
+    email = body.get("email")
+    user = db.query(User).filter(User.email == email).first() 
+    if not user:
+        raise HTTPException(status_code = 404, detail = "User not found")
+
+    if user.is_verified:
+        raise HTTPException(status_code = 409, detail = "User already verified")
+
+    # Generate new token
+    user.verification_token = secrets.token_urlsafe(32)
+    user.token_expires_at = datetime.now() + timedelta(hours=24)
+    db.commit()
+    return {"status": "new token sent"}
