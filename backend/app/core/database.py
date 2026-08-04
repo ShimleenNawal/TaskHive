@@ -7,4 +7,10 @@ SessionLocal = sessionmaker(autocommit = False, autoflush = False, bind=engine)
 
 Base = declarative_base()
 
+def get_db():
+    db = SessionLocal() # create a connection to database 
+    try:
+        yield db # waiting for others to use it 
+    finally:
+        db.close() # makes sure to close the connection even if error
 
