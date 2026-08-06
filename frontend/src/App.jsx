@@ -4,15 +4,20 @@ import viteLogo from "./assets/vite.svg";
 import heroImg from "./assets/hero.png";
 import "./App.css";
 import client from "./api/client";
+import { AuthProvider } from "./context/AuthContext";
 
-function App() {
+export default function App() {
   const [count, setCount] = useState(0);
+
   useEffect(() => {
-    client.get("/").then((r) => console.log(r.data));
+    client
+      .get("/")
+      .then((r) => console.log("Backend response:", r.data))
+      .catch((e) => console.log("Error:", e.response?.status));
   }, []);
 
   return (
-    <>
+    <AuthProvider>
       <section id="center">
         <div className="hero">
           <img src={heroImg} className="base" width="170" height="179" alt="" />
@@ -119,8 +124,6 @@ function App() {
 
       <div className="ticks"></div>
       <section id="spacer"></section>
-    </>
+    </AuthProvider>
   );
 }
-
-export default App;
