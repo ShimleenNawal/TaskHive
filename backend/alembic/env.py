@@ -38,7 +38,9 @@ target_metadata = Base.metadata # changed from None
 # ... etc.
 
 # Import models so Alembic can see them
-from app.models.user import User
+# Importing the package registers every model on Base.metadata so `alembic revision --autogenerate` can see them. Do not remove.
+
+import app.models
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
