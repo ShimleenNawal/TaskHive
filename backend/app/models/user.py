@@ -7,10 +7,10 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
-    email = Column(String, unique = True, index = True)
-    hashed_password = Column(String)
-    is_verified = Column(Boolean, default = False)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    is_verified = Column(Boolean, default=False, nullable=False, server_default="false")
     verification_token = Column(String, nullable = True) # needs to be emailed 
-    token_expires_at = Column(DateTime, nullable = True) # when token expires 
-    created_at = Column(DateTime, default = func.now()) # auto-timestamp on creation 
+    token_expires_at = Column(DateTime(timezone=True), nullable = True) # when token expires 
+    created_at = Column(DateTime(timezone=True), default = func.now()) # auto-timestamp on creation 
