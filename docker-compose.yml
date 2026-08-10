@@ -1,0 +1,43 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://taskhive:taskhive@db:5432/taskhive
+      SECRET_KEY: your-secret-key
+      MAIL_SERVER: mail
+      MAIL_PORT: 1025
+      ALGORITHM: HS256
+      TOKEN_EXPIRE_HOURS: 1
+    depends_on:
+      - db
+    networks:
+      - taskhive-net
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - taskhive-net
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: taskhive
+      POSTGRES_PASSWORD: taskhive
+      POSTGRES_DB: taskhive
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - taskhive-net
+
+volumes:
+  postgres_data:
+
+networks:
+  taskhive-net:
+    driver: bridge
