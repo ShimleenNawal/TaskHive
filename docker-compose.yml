@@ -4,12 +4,13 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://taskhive:taskhive@db:5432/taskhive
-      SECRET_KEY: your-secret-key
+      DATABASE_URL: postgresql://mlbd:postgres@db:5432/taskhive
       MAIL_SERVER: mail
       MAIL_PORT: 1025
       ALGORITHM: HS256
       TOKEN_EXPIRE_HOURS: 1
+    volumes:
+      - ./backend/.env:/app/.env # mount the .env file
     depends_on:
       - db
     networks:
@@ -25,10 +26,12 @@ services:
       - taskhive-net
 
   db:
-    image: postgres:15
+    image: postgres:16
+    ports:
+      - "5433:5432"
     environment:
-      POSTGRES_USER: taskhive
-      POSTGRES_PASSWORD: taskhive
+      POSTGRES_USER: mlbd
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: taskhive
     volumes:
       - postgres_data:/var/lib/postgresql/data
