@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import auth 
+from app.routers import auth, users 
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -17,3 +17,4 @@ def get_status():
     return {"status": "ok"}
 
 app.include_router(auth.router, prefix = "/api")
+app.include_router(users.router, prefix="/api")
