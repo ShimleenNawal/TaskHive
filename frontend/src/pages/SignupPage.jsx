@@ -1,104 +1,121 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Link, useNavigate } from "react-router-dom";
+
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+const signupSchema = z.object({
+  name: z.string().min(2, "Name required"),
+  email: z.string().email("Invalid email"),
+  password: z
+    .string()
+    .min(8, "Min 8 characters")
+    .regex(/[A-Za-z]/, "Must contain a letter")
+    .regex(/[0-9]/, "Must contain a digit"),
+});
 
 export default function SignupPage() {
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(signupSchema),
   });
-  const [errors, setErrors] = useState({});
-  const [success, setSuccess] = useState(false);
-  const [loading, setLoading] = useState(false);
+
   const { signup } = useAuth();
   const navigate = useNavigate();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    setErrors({ ...errors, [e.target.name]: "" }); // clear error on change
-  };
-
-  const validate = () => {
-    const newErrors = {};
-    if (!formData.name) newErrors.name = "Name required";
-    if (!formData.email) newErrors.email = "Email required";
-    if (formData.password.length < 8) newErrors.password = "Min 8 chars";
-    if (!/[a-zA-Z]/.test(formData.password))
-      newErrors.password = "Need at least 1 letter";
-    if (!/[0-9]/.test(formData.password))
-      newErrors.password = "Need at least 1 digit";
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-
+  const onSubmit = async (data) => {
+    setError("");
     setLoading(true);
+
     try {
-      await signup(formData.name, formData.email, formData.password);
-      setSuccess(true);
-    } catch (error) {
-      setErrors({
-        submit: error.response?.data?.detail || "Signup failed",
-      });
+      await signup(data.name, data.email, data.password);
+      navigate("/verify");
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.detail || "Signup failed");
     } finally {
       setLoading(false);
     }
   };
 
-  if (success) {
-    return (
-      <div>
-        <h2>Check your email!</h2>
-        <p>We sent a verification link to {formData.email}</p>
-        <button onClick={() => navigate("/login")}>Go to login</button>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <h2>Sign Up</h2>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          name="name"
-          placeholder="Name"
-          value={formData.name}
-          onChange={handleChange}
-        />
-        {errors.name && <p style={{ color: "red" }}>{errors.name}</p>}
+    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 px-4">
+      <div className="w-full max-w-md p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+        <h1 className="text-2xl font-bold mb-6 text-black dark:text-white">
+          Sign Up
+        </h1>
 
-        <input
-          type="email"
-          name="email"
-          placeholder="Email"
-          value={formData.email}
-          onChange={handleChange}
-        />
-        {errors.email && <p style={{ color: "red" }}>{errors.email}</p>}
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded">
+            {error}
+          </div>
+        )}
 
-        <input
-          type="password"
-          name="password"
-          placeholder="Password (min 8 chars, 1 letter + 1 digit)"
-          value={formData.password}
-          onChange={handleChange}
-        />
-        {errors.password && <p style={{ color: "red" }}>{errors.password}</p>}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <Input
+              {...register("name")}
+              type="text"
+              placeholder="Full Name"
+              autoComplete="name"
+            />
+            {errors.name && (
+              <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>
+            )}
+          </div>
 
-        {errors.submit && <p style={{ color: "red" }}>{errors.submit}</p>}
+          <div>
+            <Input
+              {...register("email")}
+              type="email"
+              placeholder="Email"
+              autoComplete="email"
+            />
+            {errors.email && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.email.message}
+              </p>
+            )}
+          </div>
 
-        <button type="submit" disabled={loading}>
-          {loading ? "Signing up..." : "Sign Up"}
-        </button>
-      </form>
-      <p>
-        Already have an account? <a href="/login">Log in</a>
-      </p>
+          <div>
+            <Input
+              {...register("password")}
+              type="password"
+              placeholder="Password"
+              autoComplete="new-password"
+            />
+            {errors.password && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.password.message}
+              </p>
+            )}
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Signing up..." : "Sign Up"}
+          </Button>
+        </form>
+
+        <p className="mt-4 text-center text-gray-600 dark:text-gray-400">
+          Already have an account?{" "}
+          <Link
+            to="/login"
+            className="text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Log in
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }
