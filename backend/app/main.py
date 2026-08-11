@@ -12,7 +12,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
+@app.get("/health")
 def get_status():
     return {"status": "ok"}
 
