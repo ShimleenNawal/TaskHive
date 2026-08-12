@@ -8,7 +8,9 @@ class Project(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
+    description = Column(String(255), nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    deadline = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
 
 class ProjectMember(Base):
