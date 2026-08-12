@@ -17,10 +17,20 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const url = error.config?.url || "";
+
+    const isAuthRequest =
+      url.includes("/api/auth/login") ||
+      url.includes("/api/auth/signup") ||
+      url.includes("/api/auth/verify") ||
+      url.includes("/api/auth/resend-verification");
+
+    if (status === 401 && !isAuthRequest) {
       localStorage.clear();
       window.location.href = "/login";
     }
+
     return Promise.reject(error);
   },
 );
