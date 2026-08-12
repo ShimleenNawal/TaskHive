@@ -78,6 +78,6 @@ def login(credentials: LoginRequest, db = Depends(get_db)):
     access_token = create_access_token({"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.get("/users/me", response_model = UserOut)
+@router.get("/users", response_model = UserOut)
 def get_profile(current_user: User = Depends(get_current_user)):
     return current_user
