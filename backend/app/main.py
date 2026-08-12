@@ -3,7 +3,7 @@ from app.routers import auth
 
 app = FastAPI()
 
-@app.get("/")
+@app.get("/health")
 def get_status():
     return {"status": "ok"}
 
