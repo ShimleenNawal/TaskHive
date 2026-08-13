@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 
 class ProjectCreate(BaseModel):
@@ -21,3 +21,6 @@ class ProjectOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class MemberInvite(BaseModel):
+    email: EmailStr
