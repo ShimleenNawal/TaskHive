@@ -10,6 +10,7 @@ services:
       ALGORITHM: HS256
       TOKEN_EXPIRE_HOURS: 1
     volumes:
+      - ./backend:/app
       - ./backend/.env:/app/.env # mount the .env file
     depends_on:
       - db
