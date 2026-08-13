@@ -105,10 +105,15 @@ def invite_member(project_id: int, member_data: MemberInvite, current_user: User
     if not user:
         raise HTTPException(status_code = 404, detail = "User not found")
 
+    # Check if found user is verified
+    if not user.is_verified:
+        raise HTTPException(status_code = 403, detail = "User must verify their email before being added to a project")
+
+    # Check if owner is trying to add themselves
     if user.id == project.owner_id:
         raise HTTPException(status_code = 409, detail = "You are already the project owner")
 
-    # Check whether they're already a member
+    # Check whether user is already a member
     existing_member = db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id,
         ProjectMember.user_id == user.id,
