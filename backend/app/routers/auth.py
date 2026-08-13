@@ -1,12 +1,12 @@
 from fastapi import Depends
 from fastapi import APIRouter, HTTPException
 from app.core.database import get_db
-from app.core.security import create_access_token, get_current_user
+from app.core.security import create_access_token
 from app.models.user import User 
 from app.schemas.user import UserCreate, UserOut, LoginRequest, LoginResponse
 from app.services.auth_service import hash_password, verify_password 
 import secrets
-from datetime import datetime, timedelta 
+from datetime import datetime, timedelta, timezone 
  
 
 router = APIRouter(prefix = "/auth", tags = ["auth"])
@@ -19,7 +19,7 @@ def signup(user_data: UserCreate, db = Depends(get_db)):
 
     # Otherwise, create user
     verification_token = secrets.token_urlsafe(32)
-    token_expires_at = datetime.now() + timedelta(hours=24)
+    token_expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
 
     new_user = User(
         name = user_data.name,
@@ -41,7 +41,7 @@ def verify_email(token: str, db = Depends(get_db)):
     if not user:
         raise HTTPException(status_code = 404, detail = "Token not found")
 
-    if datetime.now() > user.token_expires_at:
+    if datetime.now(timezone.utc) > user.token_expires_at:
             raise HTTPException(status_code = 400, detail = "Token expired")
 
     user.is_verified = True
@@ -62,13 +62,15 @@ def resend_verification(body: dict, db = Depends(get_db)):
 
     # Generate new token
     user.verification_token = secrets.token_urlsafe(32)
-    user.token_expires_at = datetime.now() + timedelta(hours=24)
+    user.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
     db.commit()
     return {"status": "new token sent"}
 
 @router.post("/login", response_model = LoginResponse)
 def login(credentials: LoginRequest, db = Depends(get_db)):
     user = db.query(User).filter(User.email == credentials.email).first() 
+    print("USER:", user)
+    print("PASSWORD MATCH:", verify_password(credentials.password, user.hashed_password) if user else None)
     if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(status_code = 401, detail = "Invalid credentials")
 
