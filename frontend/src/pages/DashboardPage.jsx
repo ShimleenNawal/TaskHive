@@ -52,7 +52,7 @@ export default function DashboardPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Welcome */}
-        <div className="mb-8 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white shadow">
+        <div className="mb-8 rounded-xl bg-gradient-to-r from-gray-900 to-gray-900 p-6 text-white shadow">
           <h2 className="text-2xl font-bold">
             Welcome{user?.name ? `, ${user.name}` : ""}!
           </h2>
@@ -100,7 +100,11 @@ export default function DashboardPage() {
           <h3 className="mb-4 text-lg font-semibold">Quick Actions</h3>
 
           <div className="flex flex-wrap gap-3">
-            <Button type="button" className="bg-blue-600 hover:bg-blue-700">
+            <Button
+              type="button"
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={() => navigate("/projects/new")}
+            >
               + New Project
             </Button>
 
@@ -108,7 +112,11 @@ export default function DashboardPage() {
               + New Task
             </Button>
 
-            <Button type="button" variant="outline">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate("/projects")}
+            >
               View Projects
             </Button>
           </div>
