@@ -1,23 +1,8 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-
-const projectSchema = z.object({
-  name: z
-    .string()
-    .min(1, "Project name is required")
-    .max(255, "Project name must be 255 characters or less"),
-
-  description: z
-    .string()
-    .max(255, "Description must be 255 characters or less")
-    .optional()
-    .or(z.literal("")),
-
-  deadline: z.string().optional(),
-});
+import { projectSchema } from "@/schemas/projectSchema";
 
 export default function CreateProjectPage() {
   const navigate = useNavigate();
