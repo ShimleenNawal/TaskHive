@@ -24,3 +24,17 @@ class ProjectOut(BaseModel):
 
 class MemberInvite(BaseModel):
     email: EmailStr
+
+class ProjectMemberOut(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    email: EmailStr
+    role: str
+
+    class Config:
+       from_attributes = True
+
+class ProjectDetailOut(ProjectOut):
+    members: list[ProjectMemberOut] = Field(default_factory=list)
+    

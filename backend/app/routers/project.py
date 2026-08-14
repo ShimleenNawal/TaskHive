@@ -4,7 +4,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.project import Project
 from app.models.project import ProjectMember
-from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectOut, MemberInvite 
+from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectOut, MemberInvite, ProjectDetailOut 
 
 router = APIRouter()
 
@@ -67,6 +67,47 @@ def update_project(project_id: int, project_data: ProjectUpdate, current_user: U
     db.refresh(existing_project)
 
     return existing_project
+
+@router.get("/projects/{project_id}", response_model=ProjectDetailOut)
+def get_project_details(project_id: int, current_user: User = Depends(get_current_user), db = Depends(get_db)):
+    project = (
+        db.query(Project)
+        .join(ProjectMember, ProjectMember.project_id == Project.id)
+        .filter(
+            Project.id == project_id,
+            ProjectMember.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not project:
+        raise HTTPException(status_code = 404, detail = "Project not found")
+
+    members = (
+        db.query(ProjectMember, User)
+        .join(User, User.id == ProjectMember.user_id)
+        .filter(ProjectMember.project_id == project_id)
+        .all()
+    )
+
+    return {
+        "id": project.id,
+        "name": project.name,
+        "description": project.description,
+        "owner_id": project.owner_id,
+        "deadline": project.deadline,
+        "created_at": project.created_at,
+        "members": [
+            {
+                "id": member.id,
+                "user_id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "role": member.role,
+            }
+            for member, user in members
+        ],
+    }
 
 @router.delete("/projects/{project_id}")
 def delete_project(project_id: int, current_user: User = Depends(get_current_user), db = Depends(get_db)):
