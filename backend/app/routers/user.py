@@ -7,7 +7,7 @@ from app.core.database import get_db
 router = APIRouter(prefix="/users", tags=["users"])
 
 @router.get("/me", response_model=UserOut)
-def get_profile(current_user: User = Depends(get_current_user), db=Depends(get_db)):
+def get_profile(current_user: User = Depends(get_current_user)):
     return current_user
 
 @router.get("/", response_model=list[UserListOut])
