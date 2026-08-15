@@ -37,3 +37,11 @@ class LoginResponse(BaseModel):
 
 class ResendRequest(BaseModel): 
     email: EmailStr
+
+class UserListOut(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+
+    class Config:
+        from_attributes = True
