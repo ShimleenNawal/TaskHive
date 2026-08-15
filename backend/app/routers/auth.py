@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from app.core.database import get_db
 from app.core.security import create_access_token
 from app.models.user import User 
-from app.schemas.user import UserCreate, UserOut, LoginRequest, LoginResponse
+from app.schemas.user import UserCreate, UserOut, LoginRequest, LoginResponse, ResendRequest
 from app.services.auth_service import hash_password, verify_password 
 import secrets
 from datetime import datetime, timedelta, timezone 
@@ -51,9 +51,8 @@ def verify_email(token: str, db = Depends(get_db)):
     return {"status": "verified"}
 
 @router.post("/resend-verification")
-def resend_verification(body: dict, db = Depends(get_db)):
-    email = body.get("email")
-    user = db.query(User).filter(User.email == email).first() 
+def resend_verification(body: ResendRequest, db = Depends(get_db)):
+    user = db.query(User).filter(User.email == body.email).first() 
     if not user:
         raise HTTPException(status_code = 404, detail = "User not found")
 

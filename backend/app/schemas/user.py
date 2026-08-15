@@ -34,3 +34,6 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer" # default for JWT 
+
+class ResendRequest(BaseModel): 
+    email: EmailStr
