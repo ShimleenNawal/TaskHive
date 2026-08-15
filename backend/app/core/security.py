@@ -29,8 +29,11 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         token = credentials.credentials
         payload = verify_token(token)  # raises exception if invalid/expired
         if not payload:
-            raise HTTPException(status_code=401, detail = "Invalid or expired token")
-        user_id = payload.get("sub")
+            raise HTTPException(status_code = 401, detail = "Invalid or expired token")
+        try:
+            user_id = int(payload.get("sub"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code = 401, detail = "Invalid token")
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(status_code = 401, detail = "User not found")
