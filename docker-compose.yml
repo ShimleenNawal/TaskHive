@@ -3,12 +3,8 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql://mlbd:postgres@db:5432/taskhive
-      MAIL_SERVER: mail
-      MAIL_PORT: 1025
-      ALGORITHM: HS256
-      TOKEN_EXPIRE_HOURS: 1
+    env_file:
+      - ./backend/.env
     volumes:
       - ./backend:/app
       - ./backend/.env:/app/.env # mount the .env file
