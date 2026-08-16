@@ -4,7 +4,8 @@ from app.core.database import get_db
 from app.core.security import create_access_token
 from app.models.user import User 
 from app.schemas.user import UserCreate, UserOut, LoginRequest, LoginResponse, ResendRequest
-from app.services.auth_service import hash_password, verify_password 
+from app.services.auth_service import hash_password, verify_password
+from app.core.config import settings 
 import secrets
 from datetime import datetime, timedelta, timezone 
  
@@ -19,7 +20,7 @@ def signup(user_data: UserCreate, db = Depends(get_db)):
 
     # Otherwise, create user
     verification_token = secrets.token_urlsafe(32)
-    token_expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+    token_expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS)
 
     new_user = User(
         name = user_data.name,
@@ -61,15 +62,13 @@ def resend_verification(body: ResendRequest, db = Depends(get_db)):
 
     # Generate new token
     user.verification_token = secrets.token_urlsafe(32)
-    user.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+    user.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS)
     db.commit()
     return {"status": "new token sent"}
 
 @router.post("/login", response_model = LoginResponse)
 def login(credentials: LoginRequest, db = Depends(get_db)):
     user = db.query(User).filter(User.email == credentials.email).first() 
-    print("USER:", user)
-    print("PASSWORD MATCH:", verify_password(credentials.password, user.hashed_password) if user else None)
     if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(status_code = 401, detail = "Invalid credentials")
 

@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     MAIL_PORT: int
     ALGORITHM: str
     TOKEN_EXPIRE_HOURS: int
+    VERIFICATION_TOKEN_EXPIRE_HOURS: int
     
     class Config:
         env_file = ".env"
