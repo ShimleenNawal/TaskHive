@@ -3,6 +3,7 @@ from pydantic import SecretStr
 
 class Settings(BaseSettings):
     DATABASE_URL: str
+    TEST_DATABASE_URL: str
     SECRET_KEY: SecretStr
     BACKEND_CORS_ORIGINS: list[str] 
     MAIL_SERVER: str

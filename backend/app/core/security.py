@@ -17,7 +17,7 @@ def create_access_token(data: dict) -> str:
     return encoded_jwt
 
 # Decodes and validates a JWT token when user makes a protected request.
-def verify_token(token: str) -> dict:
+def verify_token(token: str) -> dict | None:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY.get_secret_value(), algorithms=[settings.ALGORITHM])
         return payload
