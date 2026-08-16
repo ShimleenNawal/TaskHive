@@ -16,8 +16,12 @@ export default function ProjectDetailPage() {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const token = localStorage.getItem("access_token");
+  const { user } = useAuth();
+  const isOwner = user?.id === project?.owner_id;
 
   const {
     register: registerProject,
@@ -78,6 +82,37 @@ export default function ProjectDetailPage() {
 
     fetchProject();
   }, [id, token, resetProject]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoadingUsers(true);
+
+        const response = await fetch("http://localhost:8000/api/users/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || "Failed to load users");
+        }
+
+        setUsers(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+
+    if (isOwner) {
+      fetchUsers();
+    }
+  }, [token, isOwner]);
 
   // PATCH /api/projects/{project_id}
   const updateProject = async (data) => {
@@ -253,9 +288,6 @@ export default function ProjectDetailPage() {
       </div>
     );
   }
-
-  const { user } = useAuth();
-  const isOwner = user?.id === project.owner_id;
 
   return (
     <div className="min-h-screen bg-white text-black dark:bg-gray-950 dark:text-white">
@@ -489,12 +521,31 @@ export default function ProjectDetailPage() {
               className="mt-6 flex flex-col gap-3 sm:flex-row"
             >
               <div className="flex-1">
-                <input
-                  type="email"
-                  placeholder="member@example.com"
+                <select
                   {...registerInvite("email")}
                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800"
-                />
+                  disabled={loadingUsers || inviting}
+                >
+                  <option value="">
+                    {loadingUsers ? "Loading users..." : "Select a member"}
+                  </option>
+
+                  {users
+                    .filter(
+                      (availableUser) =>
+                        !project.members?.some(
+                          (member) => member.user_id === availableUser.id,
+                        ),
+                    )
+                    .map((availableUser) => (
+                      <option
+                        key={availableUser.id}
+                        value={availableUser.email}
+                      >
+                        {availableUser.name} — {availableUser.email}
+                      </option>
+                    ))}
+                </select>
 
                 {inviteErrors.email && (
                   <p className="mt-1 text-sm text-red-600">
@@ -503,7 +554,7 @@ export default function ProjectDetailPage() {
                 )}
               </div>
 
-              <Button type="submit" disabled={inviting}>
+              <Button type="submit" disabled={inviting || loadingUsers}>
                 {inviting ? "Inviting..." : "Invite Member"}
               </Button>
             </form>
