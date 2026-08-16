@@ -1,9 +1,9 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator  
 
 class UserCreate(BaseModel): # Sign-up
-    name: str
+    name: str = Field(..., min_length = 1, max_length = 255)
     email: EmailStr # Email format validation
-    password: str = Field(..., min_length = 8) # min 8 chars
+    password: str = Field(..., min_length = 8, max_length = 128) # min 8 chars
 
     @field_validator('password') # custom pydantic password validation 
     @classmethod
