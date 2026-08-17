@@ -2,6 +2,7 @@ from fastapi import Depends
 from fastapi import APIRouter, HTTPException
 from app.core.database import get_db
 from app.core.security import create_access_token
+from app.core.email import send_verification_email
 from app.models.user import User 
 from app.schemas.user import UserCreate, UserOut, LoginRequest, LoginResponse, ResendRequest
 from app.services.auth_service import hash_password, verify_password
@@ -13,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 router = APIRouter(prefix = "/auth", tags = ["auth"])
 
 @router.post("/signup", response_model = UserOut)
-def signup(user_data: UserCreate, db = Depends(get_db)):
+async def signup(user_data: UserCreate, db = Depends(get_db)):
     # Check if email already exists in db
     if db.query(User).filter(User.email == user_data.email).first(): 
         raise HTTPException(status_code = 409, detail = "Email already exists")
@@ -34,6 +35,11 @@ def signup(user_data: UserCreate, db = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user) 
+
+    await send_verification_email(
+    user_data.email,
+    verification_token,
+    )
     return new_user
 
 @router.get("/verify")
@@ -52,7 +58,7 @@ def verify_email(token: str, db = Depends(get_db)):
     return {"status": "verified"}
 
 @router.post("/resend-verification")
-def resend_verification(body: ResendRequest, db = Depends(get_db)):
+async def resend_verification(body: ResendRequest, db = Depends(get_db)):
     user = db.query(User).filter(User.email == body.email).first() 
     if not user:
         raise HTTPException(status_code = 404, detail = "User not found")
@@ -64,6 +70,10 @@ def resend_verification(body: ResendRequest, db = Depends(get_db)):
     user.verification_token = secrets.token_urlsafe(32)
     user.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS)
     db.commit()
+    await send_verification_email(
+    user.email,
+    user.verification_token,
+    )
     return {"status": "new token sent"}
 
 @router.post("/login", response_model = LoginResponse)

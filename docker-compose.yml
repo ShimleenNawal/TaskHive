@@ -38,6 +38,14 @@ services:
     networks:
       - taskhive-net
 
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - taskhive-net
+
 volumes:
   postgres_data:
 
