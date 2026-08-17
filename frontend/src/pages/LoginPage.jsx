@@ -22,17 +22,19 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
-  const { login } = useAuth();
+  const { login, resendVerification } = useAuth();
   const navigate = useNavigate();
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
+  const [email, setEmail] = useState("");
 
   const onSubmit = async (data) => {
     setError("");
     setNeedsVerification(false);
     setLoading(true);
+    setEmail(data.email);
 
     try {
       await login(data.email, data.password);
@@ -51,10 +53,16 @@ export default function LoginPage() {
     }
   };
 
-  const handleResendVerification = () => {
-    // TODO:
-    // Connect this to AuthContext resend verification function.
-    console.log("Resend verification for:");
+  const handleResendVerification = async () => {
+    try {
+      setError("");
+      await resendVerification(email);
+      setError("Verification email sent. Please check your inbox.");
+    } catch (err) {
+      setError(
+        err.response?.data?.detail || "Failed to resend verification email",
+      );
+    }
   };
 
   return (
