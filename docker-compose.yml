@@ -22,6 +22,8 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+    env_file:
+      - ./frontend/.env
     networks:
       - taskhive-net
 
