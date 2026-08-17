@@ -58,17 +58,9 @@ export default function SignupPage() {
             </h1>
 
             <p className="mt-3 text-gray-600 dark:text-gray-400">
-              We sent a verification link to your email address.
+              We sent a verification link to your email address. Please verify
+              your email before logging in.
             </p>
-
-            <a
-              href="http://localhost:8025"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 inline-block text-blue-600 underline dark:text-blue-400"
-            >
-              Open MailHog
-            </a>
 
             <Button
               type="button"
