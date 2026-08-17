@@ -17,8 +17,13 @@ services:
     build: ./frontend
     ports:
       - "5174:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - backend
+    env_file:
+      - ./frontend/.env
     networks:
       - taskhive-net
 
