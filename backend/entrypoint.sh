@@ -9,7 +9,7 @@ done
 echo "PostgreSQL is ready!"
 
 echo "Running migrations..."
-alembic upgrade head
+poetry run alembic upgrade head
 
 echo "Starting uvicorn..."
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

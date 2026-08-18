@@ -18,7 +18,8 @@ dependencies = [
     "alembic (>=1.19.1,<2.0.0)",
     "uvicorn (>=0.52.1,<0.53.0)",
     "psycopg2-binary (>=2.9.12,<3.0.0)",
-    "email-validator (>=2.3.0,<3.0.0)"
+    "email-validator (>=2.3.0,<3.0.0)",
+    "fastapi-mail (>=1.5.8,<2.0.0)"
 ]
 
 
