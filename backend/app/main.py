@@ -1,20 +1,22 @@
 from fastapi import FastAPI
-from app.routers import auth, user 
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
+from app.routers.routes import api_router
 
-app = FastAPI()
+app = FastAPI(title="TaskHive API",
+    version="0.1.0",
+    description="API for the TaskHive project task management application.")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174"],
+    allow_origins= settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 @app.get("/health")
 def get_status():
     return {"status": "ok"}
 
-app.include_router(auth.router, prefix = "/api")
-app.include_router(user.router, prefix="/api")
+app.include_router(api_router)

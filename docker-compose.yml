@@ -3,13 +3,10 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql://mlbd:postgres@db:5432/taskhive
-      MAIL_SERVER: mail
-      MAIL_PORT: 1025
-      ALGORITHM: HS256
-      TOKEN_EXPIRE_HOURS: 1
+    env_file:
+      - ./backend/.env
     volumes:
+      - ./backend:/app
       - ./backend/.env:/app/.env # mount the .env file
     depends_on:
       - db
@@ -20,8 +17,13 @@ services:
     build: ./frontend
     ports:
       - "5174:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - backend
+    env_file:
+      - ./frontend/.env
     networks:
       - taskhive-net
 

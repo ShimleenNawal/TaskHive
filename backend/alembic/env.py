@@ -6,6 +6,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.database import Base
 from app.core.config import settings
+
+# Import models so Alembic can see them
+# Importing the package registers every model on Base.metadata so `alembic revision --autogenerate` can see them. Do not remove.
+import app.models
    
 sqlalchemy_url = settings.DATABASE_URL
 
@@ -36,11 +40,6 @@ target_metadata = Base.metadata # changed from None
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-
-# Import models so Alembic can see them
-# Importing the package registers every model on Base.metadata so `alembic revision --autogenerate` can see them. Do not remove.
-
-import app.models
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
