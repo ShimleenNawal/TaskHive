@@ -12,5 +12,5 @@ class Task(Base):
     due_date = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(20), default="TODO", nullable=False)  # TODO, IN_PROGRESS, DONE
     priority = Column(String(20), default="MEDIUM", nullable=False)  # LOW, MEDIUM, HIGH
-    assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True, ondelete="SET NULL")
+    assignee_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
