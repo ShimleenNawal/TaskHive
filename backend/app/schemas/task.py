@@ -31,7 +31,9 @@ class TaskOut(BaseModel):
     priority: str
     due_date: datetime | None
     assignee_id: int | None
+    reporter_id: int
     created_at: datetime
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True

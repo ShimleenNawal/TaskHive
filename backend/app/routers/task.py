@@ -81,6 +81,7 @@ def create_task(
         priority=task.priority,
         due_date=task.due_date,
         assignee_id=task.assignee_id,
+        reporter_id=current_user.id,
     )
 
     db.add(new_task)
