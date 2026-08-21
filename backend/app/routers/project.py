@@ -97,6 +97,7 @@ def get_project_details(project_id: int, current_user: User = Depends(get_curren
         "owner_id": project.owner_id,
         "deadline": project.deadline,
         "created_at": project.created_at,
+        "updated_at": project.updated_at,
         "members": [
             {
                 "id": member.id,
@@ -104,6 +105,7 @@ def get_project_details(project_id: int, current_user: User = Depends(get_curren
                 "name": user.name,
                 "email": user.email,
                 "role": member.role,
+                "created_at": member.created_at,
             }
             for member, user in members
         ],

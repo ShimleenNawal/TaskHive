@@ -18,6 +18,7 @@ class ProjectOut(BaseModel):
     owner_id: int
     deadline: datetime | None
     created_at: datetime
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -31,10 +32,10 @@ class ProjectMemberOut(BaseModel):
     name: str
     email: EmailStr
     role: str
+    created_at: datetime | None = None
 
     class Config:
-       from_attributes = True
+        from_attributes = True
 
 class ProjectDetailOut(ProjectOut):
     members: list[ProjectMemberOut] = Field(default_factory=list)
-    
