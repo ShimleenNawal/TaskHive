@@ -2,10 +2,21 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import nulls_last
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.deps import require_project_member, get_task_in_project
 from app.models.user import User
 from app.models.project import ProjectMember
 from app.models.task import Task
-from app.schemas.task import TaskCreate, TaskUpdate, TaskOut, TaskStatus, TaskPriority, TaskSort
+from app.models.label import Label, TaskLabel
+from app.schemas.task import (
+    TaskCreate,
+    TaskUpdate,
+    TaskOut,
+    TaskDetailOut,
+    TaskStatus,
+    TaskPriority,
+    TaskSort,
+)
+from app.schemas.label import LabelSummary
 
 router = APIRouter(tags=["tasks"])
 
@@ -17,20 +28,6 @@ SORT_FIELDS = {
     "title": Task.title,
 }
 
-def require_project_member(project_id: int, user_id: int, db):
-    membership = (
-        db.query(ProjectMember)
-        .filter(
-            ProjectMember.project_id == project_id,
-            ProjectMember.user_id == user_id,
-        )
-        .first()
-    )
-
-    if not membership:
-        raise HTTPException(status_code = 404, detail = "Project not found")
-
-    return membership
 
 def require_assignee_is_member(project_id: int, assignee_id: int | None, db):
     if assignee_id is None:
@@ -46,22 +43,38 @@ def require_assignee_is_member(project_id: int, assignee_id: int | None, db):
     )
 
     if not assignee_membership:
-        raise HTTPException(status_code = 400, detail = "Assignee must be a member of this project")
-
-def get_task_in_project(project_id: int, task_id: int, db):
-    task = (
-        db.query(Task)
-        .filter(
-            Task.id == task_id,
-            Task.project_id == project_id,
+        raise HTTPException(
+            status_code=400,
+            detail="Assignee must be a member of this project",
         )
-        .first()
+
+
+def get_task_labels(task_id: int, db) -> list[LabelSummary]:
+    labels = (
+        db.query(Label)
+        .join(TaskLabel, TaskLabel.label_id == Label.id)
+        .filter(TaskLabel.task_id == task_id)
+        .order_by(Label.name.asc())
+        .all()
     )
+    return [LabelSummary.model_validate(label) for label in labels]
 
-    if not task:
-        raise HTTPException(status_code = 404, detail = "Task not found")
 
-    return task
+def to_task_detail(task: Task, db) -> TaskDetailOut:
+    return TaskDetailOut(
+        id=task.id,
+        project_id=task.project_id,
+        title=task.title,
+        description=task.description,
+        status=task.status,
+        priority=task.priority,
+        due_date=task.due_date,
+        assignee_id=task.assignee_id,
+        reporter_id=task.reporter_id,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+        labels=get_task_labels(task.id, db),
+    )
 
 
 @router.post("/projects/{project_id}/tasks", response_model=TaskOut)
@@ -69,7 +82,8 @@ def create_task(
     project_id: int,
     task: TaskCreate,
     current_user: User = Depends(get_current_user),
-    db=Depends(get_db)):
+    db=Depends(get_db),
+):
     require_project_member(project_id, current_user.id, db)
     require_assignee_is_member(project_id, task.assignee_id, db)
 
@@ -90,14 +104,19 @@ def create_task(
 
     return new_task
 
+
 @router.get("/projects/{project_id}/tasks", response_model=list[TaskOut])
 def list_tasks(
     project_id: int,
     status: TaskStatus | None = None,
     priority: TaskPriority | None = None,
     sort: TaskSort | None = None,
+    assignee_id: int | None = None,
+    reporter_id: int | None = None,
+    label_id: int | None = None,
     current_user: User = Depends(get_current_user),
-    db=Depends(get_db)):
+    db=Depends(get_db),
+):
     require_project_member(project_id, current_user.id, db)
 
     query = db.query(Task).filter(Task.project_id == project_id)
@@ -108,6 +127,17 @@ def list_tasks(
     if priority:
         query = query.filter(Task.priority == priority)
 
+    if assignee_id is not None:
+        query = query.filter(Task.assignee_id == assignee_id)
+
+    if reporter_id is not None:
+        query = query.filter(Task.reporter_id == reporter_id)
+
+    if label_id is not None:
+        query = query.join(TaskLabel, TaskLabel.task_id == Task.id).filter(
+            TaskLabel.label_id == label_id
+        )
+
     if sort == "due_date":
         query = query.order_by(nulls_last(Task.due_date.asc()))
     elif sort:
@@ -117,13 +147,30 @@ def list_tasks(
 
     return query.all()
 
+
+@router.get(
+    "/projects/{project_id}/tasks/{task_id}",
+    response_model=TaskDetailOut,
+)
+def get_task(
+    project_id: int,
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    require_project_member(project_id, current_user.id, db)
+    task = get_task_in_project(project_id, task_id, db)
+    return to_task_detail(task, db)
+
+
 @router.put("/projects/{project_id}/tasks/{task_id}", response_model=TaskOut)
 def update_task(
     project_id: int,
     task_id: int,
     task_data: TaskUpdate,
     current_user: User = Depends(get_current_user),
-    db=Depends(get_db)):
+    db=Depends(get_db),
+):
     require_project_member(project_id, current_user.id, db)
     existing_task = get_task_in_project(project_id, task_id, db)
 
@@ -140,12 +187,14 @@ def update_task(
 
     return existing_task
 
+
 @router.delete("/projects/{project_id}/tasks/{task_id}")
 def delete_task(
     project_id: int,
     task_id: int,
     current_user: User = Depends(get_current_user),
-    db=Depends(get_db)):
+    db=Depends(get_db),
+):
     require_project_member(project_id, current_user.id, db)
     existing_task = get_task_in_project(project_id, task_id, db)
 

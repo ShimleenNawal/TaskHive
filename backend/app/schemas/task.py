@@ -1,26 +1,30 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Literal
+from app.schemas.label import LabelSummary
 
 TaskStatus = Literal["TODO", "IN_PROGRESS", "DONE"]
 TaskPriority = Literal["LOW", "MEDIUM", "HIGH"]
 TaskSort = Literal["due_date", "created_at", "priority", "status", "title"]
 
+
 class TaskCreate(BaseModel):
-    title: str = Field(..., min_length = 1, max_length = 255)
-    description: str | None = Field(None, max_length = 255)
+    title: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
     status: TaskStatus = "TODO"
     priority: TaskPriority = "MEDIUM"
     due_date: datetime | None = None
     assignee_id: int | None = None
 
+
 class TaskUpdate(BaseModel):
-    title: str | None = Field(None, min_length = 1, max_length = 255)
-    description: str | None = Field(None, max_length = 255)
+    title: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = None
     status: TaskStatus | None = None
     priority: TaskPriority | None = None
     due_date: datetime | None = None
     assignee_id: int | None = None
+
 
 class TaskOut(BaseModel):
     id: int
@@ -37,3 +41,7 @@ class TaskOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TaskDetailOut(TaskOut):
+    labels: list[LabelSummary] = Field(default_factory=list)
