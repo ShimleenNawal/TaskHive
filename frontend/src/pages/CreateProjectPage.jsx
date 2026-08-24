@@ -1,21 +1,24 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { projectSchema } from "@/schemas/projectSchema";
 import client from "@/api/client";
 import ErrorBanner from "@/components/ErrorBanner";
 import { getApiError } from "@/lib/utils";
+import { queryKeys } from "@/api/queryKeys";
 
 export default function CreateProjectPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [error, setError] = useState("");
 
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm({
     resolver: zodResolver(projectSchema),
     defaultValues: {
@@ -25,18 +28,27 @@ export default function CreateProjectPage() {
     },
   });
 
-  const onSubmit = async (data) => {
-    try {
-      setError("");
+  const createMutation = useMutation({
+    mutationFn: async (data) => {
       const response = await client.post("/projects", {
         name: data.name,
         description: data.description || null,
         deadline: data.deadline ? new Date(data.deadline).toISOString() : null,
       });
-      navigate(`/projects/${response.data.id}`);
-    } catch (err) {
+      return response.data;
+    },
+    onSuccess: (project) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      navigate(`/projects/${project.id}`);
+    },
+    onError: (err) => {
       setError(getApiError(err, "Failed to create project"));
-    }
+    },
+  });
+
+  const onSubmit = (data) => {
+    setError("");
+    createMutation.mutate(data);
   };
 
   return (
@@ -74,9 +86,7 @@ export default function CreateProjectPage() {
                 className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
               />
               {errors.name && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.name.message}
-                </p>
+                <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
               )}
             </div>
 
@@ -122,8 +132,8 @@ export default function CreateProjectPage() {
             </div>
 
             <div className="flex gap-3">
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Project"}
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create Project"}
               </Button>
               <Button
                 type="button"

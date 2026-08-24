@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import client from "@/api/client";
 import { Button } from "@/components/ui/button";
 import ErrorBanner from "@/components/ErrorBanner";
@@ -11,28 +12,34 @@ import { taskSchema } from "@/schemas/taskSchema";
 import { commentSchema } from "@/schemas/commentSchema";
 import { formatDate, getApiError } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { queryKeys } from "@/api/queryKeys";
+import {
+  fetchComments,
+  fetchLabels,
+  fetchProject,
+  fetchTask,
+} from "@/api/queries";
 
 export default function TaskDetailPage() {
   const { id: projectId, taskId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const [task, setTask] = useState(null);
-  const [project, setProject] = useState(null);
-  const [labels, setLabels] = useState([]);
-  const [comments, setComments] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
-  const [tagging, setTagging] = useState(false);
   const [selectedLabelId, setSelectedLabelId] = useState("");
   const [editingCommentId, setEditingCommentId] = useState(null);
+
+  const taskKey = queryKeys.tasks.detail(projectId, taskId);
+  const commentsKey = queryKeys.comments.list(projectId, taskId);
+  const labelsKey = queryKeys.labels.list(projectId);
 
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm({
     resolver: zodResolver(taskSchema),
   });
@@ -41,7 +48,7 @@ export default function TaskDetailPage() {
     register: registerComment,
     handleSubmit: handleCommentSubmit,
     reset: resetComment,
-    formState: { errors: commentErrors, isSubmitting: postingComment },
+    formState: { errors: commentErrors },
   } = useForm({
     resolver: zodResolver(commentSchema),
     defaultValues: { body: "" },
@@ -51,65 +58,64 @@ export default function TaskDetailPage() {
     register: registerEditComment,
     handleSubmit: handleEditCommentSubmit,
     reset: resetEditComment,
-    formState: { errors: editCommentErrors, isSubmitting: savingComment },
+    formState: { errors: editCommentErrors },
   } = useForm({
     resolver: zodResolver(commentSchema),
   });
 
+  const taskQuery = useQuery({
+    queryKey: taskKey,
+    queryFn: () => fetchTask(projectId, taskId),
+  });
+
+  const projectQuery = useQuery({
+    queryKey: queryKeys.projects.detail(projectId),
+    queryFn: () => fetchProject(projectId),
+  });
+
+  const labelsQuery = useQuery({
+    queryKey: labelsKey,
+    queryFn: () => fetchLabels(projectId),
+  });
+
+  const commentsQuery = useQuery({
+    queryKey: commentsKey,
+    queryFn: () => fetchComments(projectId, taskId),
+  });
+
+  const task = taskQuery.data;
+  const project = projectQuery.data;
+  const labels = labelsQuery.data || [];
+  const comments = commentsQuery.data || [];
+  const loading =
+    taskQuery.isLoading ||
+    projectQuery.isLoading ||
+    labelsQuery.isLoading ||
+    commentsQuery.isLoading;
+
   useEffect(() => {
-    let cancelled = false;
+    if (!task) return;
+    reset({
+      title: task.title,
+      description: task.description || "",
+      status: task.status,
+      priority: task.priority,
+      due_date: task.due_date
+        ? new Date(task.due_date).toISOString().slice(0, 16)
+        : "",
+      assignee_id: task.assignee_id ? String(task.assignee_id) : "",
+    });
+  }, [task, reset]);
 
-    async function fetchTask() {
-      try {
-        setError("");
-        const [taskRes, projectRes, labelsRes, commentsRes] = await Promise.all(
-          [
-            client.get(`/projects/${projectId}/tasks/${taskId}`),
-            client.get(`/projects/${projectId}`),
-            client.get(`/projects/${projectId}/labels`),
-            client.get(`/projects/${projectId}/tasks/${taskId}/comments`),
-          ],
-        );
+  const invalidateTaskLists = () => {
+    queryClient.invalidateQueries({
+      queryKey: ["projects", String(projectId), "tasks"],
+    });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
+  };
 
-        if (cancelled) return;
-
-        setTask(taskRes.data);
-        setProject(projectRes.data);
-        setLabels(labelsRes.data);
-        setComments(commentsRes.data);
-        reset({
-          title: taskRes.data.title,
-          description: taskRes.data.description || "",
-          status: taskRes.data.status,
-          priority: taskRes.data.priority,
-          due_date: taskRes.data.due_date
-            ? new Date(taskRes.data.due_date).toISOString().slice(0, 16)
-            : "",
-          assignee_id: taskRes.data.assignee_id
-            ? String(taskRes.data.assignee_id)
-            : "",
-        });
-      } catch (err) {
-        if (!cancelled) {
-          setError(getApiError(err, "Failed to load task"));
-          setTask(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    fetchTask();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, taskId, reset]);
-
-  const onUpdateTask = async (data) => {
-    try {
-      setError("");
+  const updateTaskMutation = useMutation({
+    mutationFn: async (data) => {
       const res = await client.put(`/projects/${projectId}/tasks/${taskId}`, {
         title: data.title,
         description: data.description || null,
@@ -118,102 +124,100 @@ export default function TaskDetailPage() {
         due_date: data.due_date ? new Date(data.due_date).toISOString() : null,
         assignee_id: data.assignee_id ? Number(data.assignee_id) : null,
       });
-      setTask((current) => ({
+      return res.data;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(taskKey, (current) => ({
         ...current,
-        ...res.data,
+        ...updated,
         labels: current?.labels || [],
       }));
+      invalidateTaskLists();
       setEditing(false);
-    } catch (err) {
-      setError(getApiError(err, "Failed to update task"));
-    }
-  };
+    },
+    onError: (err) => setError(getApiError(err, "Failed to update task")),
+  });
 
-  const onDeleteTask = async () => {
-    if (!window.confirm("Delete this task permanently?")) return;
-    try {
+  const deleteTaskMutation = useMutation({
+    mutationFn: async () => {
       await client.delete(`/projects/${projectId}/tasks/${taskId}`);
+    },
+    onSuccess: () => {
+      invalidateTaskLists();
       navigate(`/projects/${projectId}/tasks`);
-    } catch (err) {
-      setError(getApiError(err, "Failed to delete task"));
-    }
-  };
+    },
+    onError: (err) => setError(getApiError(err, "Failed to delete task")),
+  });
 
-  const onTagLabel = async () => {
-    if (!selectedLabelId) return;
-    try {
-      setTagging(true);
-      setError("");
+  const tagMutation = useMutation({
+    mutationFn: async (labelId) => {
       const res = await client.post(
         `/projects/${projectId}/tasks/${taskId}/labels`,
-        { label_id: Number(selectedLabelId) },
+        { label_id: Number(labelId) },
       );
-      setTask(res.data);
+      return res.data;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(taskKey, updated);
       setSelectedLabelId("");
-    } catch (err) {
-      setError(getApiError(err, "Failed to tag label"));
-    } finally {
-      setTagging(false);
-    }
-  };
+    },
+    onError: (err) => setError(getApiError(err, "Failed to tag label")),
+  });
 
-  const onUntagLabel = async (labelId) => {
-    try {
-      setError("");
+  const untagMutation = useMutation({
+    mutationFn: async (labelId) => {
       const res = await client.delete(
         `/projects/${projectId}/tasks/${taskId}/labels/${labelId}`,
       );
-      setTask(res.data);
-    } catch (err) {
-      setError(getApiError(err, "Failed to remove label"));
-    }
-  };
+      return res.data;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(taskKey, updated);
+    },
+    onError: (err) => setError(getApiError(err, "Failed to remove label")),
+  });
 
-  const onAddComment = async (data) => {
-    try {
-      setError("");
+  const addCommentMutation = useMutation({
+    mutationFn: async (data) => {
       await client.post(`/projects/${projectId}/tasks/${taskId}/comments`, {
         body: data.body,
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commentsKey });
       resetComment({ body: "" });
-      const commentsRes = await client.get(
-        `/projects/${projectId}/tasks/${taskId}/comments`,
-      );
-      setComments(commentsRes.data);
-    } catch (err) {
-      setError(getApiError(err, "Failed to post comment"));
-    }
-  };
+    },
+    onError: (err) => setError(getApiError(err, "Failed to post comment")),
+  });
 
-  const onSaveComment = async (commentId, data) => {
-    try {
-      setError("");
+  const saveCommentMutation = useMutation({
+    mutationFn: async ({ commentId, body }) => {
       await client.patch(
         `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
-        { body: data.body },
+        { body },
       );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commentsKey });
       setEditingCommentId(null);
-      const commentsRes = await client.get(
-        `/projects/${projectId}/tasks/${taskId}/comments`,
-      );
-      setComments(commentsRes.data);
-    } catch (err) {
-      setError(getApiError(err, "Failed to update comment"));
-    }
-  };
+    },
+    onError: (err) => setError(getApiError(err, "Failed to update comment")),
+  });
 
-  const onDeleteComment = async (commentId) => {
-    if (!window.confirm("Delete this comment?")) return;
-    try {
-      setError("");
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (commentId) => {
       await client.delete(
         `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
       );
-      setComments((current) => current.filter((c) => c.id !== commentId));
-    } catch (err) {
-      setError(getApiError(err, "Failed to delete comment"));
-    }
-  };
+      return commentId;
+    },
+    onSuccess: (commentId) => {
+      queryClient.setQueryData(commentsKey, (current = []) =>
+        current.filter((c) => c.id !== commentId),
+      );
+    },
+    onError: (err) => setError(getApiError(err, "Failed to delete comment")),
+  });
 
   const isOwner = user?.id === project?.owner_id;
   const untaggedLabels = labels.filter(
@@ -231,7 +235,12 @@ export default function TaskDetailPage() {
   if (!task) {
     return (
       <div className="min-h-screen bg-white p-8 dark:bg-gray-950 dark:text-white">
-        <ErrorBanner message={error || "Task not found"} />
+        <ErrorBanner
+          message={
+            getApiError(taskQuery.error, "Failed to load task") ||
+            "Task not found"
+          }
+        />
         <Button onClick={() => navigate(`/projects/${projectId}/tasks`)}>
           Back to Tasks
         </Button>
@@ -260,7 +269,16 @@ export default function TaskDetailPage() {
                 Edit
               </Button>
             )}
-            <Button type="button" variant="destructive" onClick={onDeleteTask}>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (!window.confirm("Delete this task permanently?")) return;
+                setError("");
+                deleteTaskMutation.mutate();
+              }}
+              disabled={deleteTaskMutation.isPending}
+            >
               Delete
             </Button>
           </div>
@@ -305,7 +323,13 @@ export default function TaskDetailPage() {
               </div>
             </>
           ) : (
-            <form onSubmit={handleSubmit(onUpdateTask)} className="space-y-4">
+            <form
+              onSubmit={handleSubmit((data) => {
+                setError("");
+                updateTaskMutation.mutate(data);
+              })}
+              className="space-y-4"
+            >
               <h2 className="text-xl font-semibold">Edit Task</h2>
               <div>
                 <label className="mb-1 block text-sm font-medium">Title</label>
@@ -364,8 +388,8 @@ export default function TaskDetailPage() {
                 </select>
               </div>
               <div className="flex gap-2">
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Saving..." : "Save"}
+                <Button type="submit" disabled={updateTaskMutation.isPending}>
+                  {updateTaskMutation.isPending ? "Saving..." : "Save"}
                 </Button>
                 <Button
                   type="button"
@@ -387,7 +411,10 @@ export default function TaskDetailPage() {
                 <button
                   key={label.id}
                   type="button"
-                  onClick={() => onUntagLabel(label.id)}
+                  onClick={() => {
+                    setError("");
+                    untagMutation.mutate(label.id);
+                  }}
                   className="group"
                   title="Click to remove"
                 >
@@ -417,10 +444,13 @@ export default function TaskDetailPage() {
               <Button
                 type="button"
                 variant="outline"
-                disabled={!selectedLabelId || tagging}
-                onClick={onTagLabel}
+                disabled={!selectedLabelId || tagMutation.isPending}
+                onClick={() => {
+                  setError("");
+                  tagMutation.mutate(selectedLabelId);
+                }}
               >
-                {tagging ? "Adding..." : "Tag"}
+                {tagMutation.isPending ? "Adding..." : "Tag"}
               </Button>
             </div>
           )}
@@ -441,7 +471,10 @@ export default function TaskDetailPage() {
         <section className="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900">
           <h2 className="text-xl font-semibold">Comments</h2>
           <form
-            onSubmit={handleCommentSubmit(onAddComment)}
+            onSubmit={handleCommentSubmit((data) => {
+              setError("");
+              addCommentMutation.mutate(data);
+            })}
             className="mt-4 space-y-2"
           >
             <textarea
@@ -455,8 +488,8 @@ export default function TaskDetailPage() {
                 {commentErrors.body.message}
               </p>
             )}
-            <Button type="submit" disabled={postingComment}>
-              {postingComment ? "Posting..." : "Post Comment"}
+            <Button type="submit" disabled={addCommentMutation.isPending}>
+              {addCommentMutation.isPending ? "Posting..." : "Post Comment"}
             </Button>
           </form>
 
@@ -502,7 +535,12 @@ export default function TaskDetailPage() {
                             type="button"
                             variant="destructive"
                             size="sm"
-                            onClick={() => onDeleteComment(comment.id)}
+                            onClick={() => {
+                              if (!window.confirm("Delete this comment?"))
+                                return;
+                              setError("");
+                              deleteCommentMutation.mutate(comment.id);
+                            }}
                           >
                             Delete
                           </Button>
@@ -511,9 +549,13 @@ export default function TaskDetailPage() {
                     </div>
                     {isEditingThis ? (
                       <form
-                        onSubmit={handleEditCommentSubmit((data) =>
-                          onSaveComment(comment.id, data),
-                        )}
+                        onSubmit={handleEditCommentSubmit((data) => {
+                          setError("");
+                          saveCommentMutation.mutate({
+                            commentId: comment.id,
+                            body: data.body,
+                          });
+                        })}
                         className="mt-3 space-y-2"
                       >
                         <textarea
@@ -530,7 +572,7 @@ export default function TaskDetailPage() {
                           <Button
                             type="submit"
                             size="sm"
-                            disabled={savingComment}
+                            disabled={saveCommentMutation.isPending}
                           >
                             Save
                           </Button>

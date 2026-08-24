@@ -1,7 +1,12 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import client from "@/api/client";
 import { Button } from "@/components/ui/button";
 import ErrorBanner from "@/components/ErrorBanner";
@@ -9,21 +14,22 @@ import { TaskPriorityBadge, TaskStatusBadge } from "@/components/TaskBadges";
 import TaskKanbanBoard from "@/components/TaskKanbanBoard";
 import { taskSchema } from "@/schemas/taskSchema";
 import { formatDateShort, getApiError } from "@/lib/utils";
+import { queryKeys } from "@/api/queryKeys";
+import {
+  buildTaskListParams,
+  fetchLabels,
+  fetchProject,
+  fetchTasks,
+} from "@/api/queries";
 
 export default function ProjectTasksPage() {
   const { id: projectId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [project, setProject] = useState(null);
-  const [tasks, setTasks] = useState([]);
-  const [labels, setLabels] = useState([]);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [view, setView] = useState("board");
-  const [updatingTaskId, setUpdatingTaskId] = useState(null);
-
   const [filters, setFilters] = useState({
     status: "",
     priority: "",
@@ -33,11 +39,17 @@ export default function ProjectTasksPage() {
     sort: "",
   });
 
+  const taskParams = useMemo(
+    () => buildTaskListParams({ view, filters }),
+    [view, filters],
+  );
+  const tasksQueryKey = queryKeys.tasks.list(projectId, taskParams);
+
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm({
     resolver: zodResolver(taskSchema),
     defaultValues: {
@@ -50,82 +62,31 @@ export default function ProjectTasksPage() {
     },
   });
 
-  useEffect(() => {
-    let cancelled = false;
+  const projectQuery = useQuery({
+    queryKey: queryKeys.projects.detail(projectId),
+    queryFn: () => fetchProject(projectId),
+  });
 
-    async function fetchTasks() {
-      try {
-        setRefreshing(true);
-        setError("");
-        const params = {};
-        // Board shows all status columns; only apply status filter in list view
-        if (view === "list" && filters.status) params.status = filters.status;
-        if (filters.priority) params.priority = filters.priority;
-        if (filters.assignee_id) params.assignee_id = filters.assignee_id;
-        if (filters.reporter_id) params.reporter_id = filters.reporter_id;
-        if (filters.label_id) params.label_id = filters.label_id;
-        if (filters.sort) params.sort = filters.sort;
+  const tasksQuery = useQuery({
+    queryKey: tasksQueryKey,
+    queryFn: () => fetchTasks(projectId, taskParams),
+  });
 
-        const [projectRes, tasksRes, labelsRes] = await Promise.all([
-          client.get(`/projects/${projectId}`),
-          client.get(`/projects/${projectId}/tasks`, { params }),
-          client.get(`/projects/${projectId}/labels`),
-        ]);
+  const labelsQuery = useQuery({
+    queryKey: queryKeys.labels.list(projectId),
+    queryFn: () => fetchLabels(projectId),
+  });
 
-        if (!cancelled) {
-          setProject(projectRes.data);
-          setTasks(tasksRes.data);
-          setLabels(labelsRes.data);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(getApiError(err, "Failed to load tasks"));
-        }
-      } finally {
-        if (!cancelled) {
-          setInitialLoading(false);
-          setRefreshing(false);
-        }
-      }
-    }
+  const project = projectQuery.data;
+  const tasks = tasksQuery.data || [];
+  const labels = labelsQuery.data || [];
+  const initialLoading =
+    projectQuery.isLoading || tasksQuery.isLoading || labelsQuery.isLoading;
+  const refreshing =
+    tasksQuery.isFetching && !tasksQuery.isLoading;
 
-    fetchTasks();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, filters, view]);
-
-  const loadData = async () => {
-    try {
-      setError("");
-      const params = {};
-      if (view === "list" && filters.status) params.status = filters.status;
-      if (filters.priority) params.priority = filters.priority;
-      if (filters.assignee_id) params.assignee_id = filters.assignee_id;
-      if (filters.reporter_id) params.reporter_id = filters.reporter_id;
-      if (filters.label_id) params.label_id = filters.label_id;
-      if (filters.sort) params.sort = filters.sort;
-
-      const [projectRes, tasksRes, labelsRes] = await Promise.all([
-        client.get(`/projects/${projectId}`),
-        client.get(`/projects/${projectId}/tasks`, { params }),
-        client.get(`/projects/${projectId}/labels`),
-      ]);
-
-      setProject(projectRes.data);
-      setTasks(tasksRes.data);
-      setLabels(labelsRes.data);
-    } catch (err) {
-      setError(getApiError(err, "Failed to load tasks"));
-    } finally {
-      setInitialLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const onCreateTask = async (data) => {
-    try {
-      setError("");
+  const createMutation = useMutation({
+    mutationFn: async (data) => {
       await client.post(`/projects/${projectId}/tasks`, {
         title: data.title,
         description: data.description || null,
@@ -134,55 +95,77 @@ export default function ProjectTasksPage() {
         due_date: data.due_date ? new Date(data.due_date).toISOString() : null,
         assignee_id: data.assignee_id ? Number(data.assignee_id) : null,
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["projects", String(projectId), "tasks"],
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
       reset();
       setShowCreate(false);
-      await loadData();
-    } catch (err) {
-      setError(getApiError(err, "Failed to create task"));
-    }
-  };
+    },
+    onError: (err) => setError(getApiError(err, "Failed to create task")),
+  });
 
-  const onDeleteTask = async (taskId) => {
-    if (!window.confirm("Delete this task?")) return;
-    try {
-      setError("");
+  const deleteMutation = useMutation({
+    mutationFn: async (taskId) => {
       await client.delete(`/projects/${projectId}/tasks/${taskId}`);
-      await loadData();
-    } catch (err) {
-      setError(getApiError(err, "Failed to delete task"));
-    }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["projects", String(projectId), "tasks"],
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
+    },
+    onError: (err) => setError(getApiError(err, "Failed to delete task")),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ taskId, status }) => {
+      const res = await client.put(`/projects/${projectId}/tasks/${taskId}`, {
+        status,
+      });
+      return res.data;
+    },
+    onMutate: async ({ taskId, status }) => {
+      await queryClient.cancelQueries({ queryKey: tasksQueryKey });
+      const previous = queryClient.getQueryData(tasksQueryKey);
+      queryClient.setQueryData(tasksQueryKey, (current = []) =>
+        current.map((item) =>
+          item.id === taskId ? { ...item, status } : item,
+        ),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(tasksQueryKey, context.previous);
+      }
+      setError(getApiError(err, "Failed to update task status"));
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(tasksQueryKey, (current = []) =>
+        current.map((item) =>
+          item.id === updated.id ? { ...item, ...updated } : item,
+        ),
+      );
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
+    },
+  });
+
+  const onDeleteTask = (taskId) => {
+    if (!window.confirm("Delete this task?")) return;
+    setError("");
+    deleteMutation.mutate(taskId);
   };
 
   const onStatusChange = async (task, nextStatus) => {
-    const previousStatus = task.status;
     setError("");
-    setUpdatingTaskId(task.id);
-    setTasks((current) =>
-      current.map((item) =>
-        item.id === task.id ? { ...item, status: nextStatus } : item,
-      ),
-    );
-
-    try {
-      const res = await client.put(`/projects/${projectId}/tasks/${task.id}`, {
-        status: nextStatus,
-      });
-      setTasks((current) =>
-        current.map((item) =>
-          item.id === task.id ? { ...item, ...res.data } : item,
-        ),
-      );
-    } catch (err) {
-      setTasks((current) =>
-        current.map((item) =>
-          item.id === task.id ? { ...item, status: previousStatus } : item,
-        ),
-      );
-      setError(getApiError(err, "Failed to update task status"));
-    } finally {
-      setUpdatingTaskId(null);
-    }
+    statusMutation.mutate({ taskId: task.id, status: nextStatus });
   };
+
+  const loadError =
+    projectQuery.error || tasksQuery.error || labelsQuery.error;
 
   if (initialLoading && !project) {
     return (
@@ -238,12 +221,23 @@ export default function ProjectTasksPage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8">
-        <ErrorBanner message={error} />
+        <ErrorBanner
+          message={
+            error ||
+            (loadError ? getApiError(loadError, "Failed to load tasks") : "")
+          }
+        />
 
         {showCreate && (
           <section className="mb-8 rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900">
             <h2 className="mb-4 text-xl font-semibold">Create Task</h2>
-            <form onSubmit={handleSubmit(onCreateTask)} className="space-y-4">
+            <form
+              onSubmit={handleSubmit((data) => {
+                setError("");
+                createMutation.mutate(data);
+              })}
+              className="space-y-4"
+            >
               <div>
                 <label className="mb-1 block text-sm font-medium">Title</label>
                 <input
@@ -320,8 +314,8 @@ export default function ProjectTasksPage() {
                   </select>
                 </div>
               </div>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Task"}
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create Task"}
               </Button>
             </form>
           </section>
@@ -434,7 +428,11 @@ export default function ProjectTasksPage() {
             <TaskKanbanBoard
               tasks={tasks}
               members={project?.members || []}
-              updatingTaskId={updatingTaskId}
+              updatingTaskId={
+                statusMutation.isPending
+                  ? statusMutation.variables?.taskId
+                  : null
+              }
               onStatusChange={onStatusChange}
               onOpenTask={(taskId) =>
                 navigate(`/projects/${projectId}/tasks/${taskId}`)
@@ -498,6 +496,7 @@ export default function ProjectTasksPage() {
                     type="button"
                     variant="destructive"
                     onClick={() => onDeleteTask(task.id)}
+                    disabled={deleteMutation.isPending}
                   >
                     Delete
                   </Button>

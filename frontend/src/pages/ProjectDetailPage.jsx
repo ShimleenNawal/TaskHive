@@ -2,34 +2,50 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { projectSchema, inviteSchema } from "@/schemas/projectSchema";
 import { useAuth } from "@/hooks/useAuth";
 import client from "@/api/client";
 import ErrorBanner from "@/components/ErrorBanner";
 import { formatDateShort, getApiError } from "@/lib/utils";
+import { queryKeys } from "@/api/queryKeys";
+import { fetchProject, fetchUsers } from "@/api/queries";
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
 
-  const [project, setProject] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [inviting, setInviting] = useState(false);
-  const [users, setUsers] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
 
-  const { user } = useAuth();
+  const {
+    data: project,
+    isLoading,
+    error: projectError,
+  } = useQuery({
+    queryKey: queryKeys.projects.detail(id),
+    queryFn: () => fetchProject(id),
+  });
+
   const isOwner = user?.id === project?.owner_id;
+
+  const {
+    data: users = [],
+    isLoading: loadingUsers,
+  } = useQuery({
+    queryKey: queryKeys.users.all,
+    queryFn: fetchUsers,
+    enabled: Boolean(isOwner),
+  });
 
   const {
     register: registerProject,
     handleSubmit: handleProjectSubmit,
     reset: resetProject,
-    formState: { errors: projectErrors, isSubmitting: updating },
+    formState: { errors: projectErrors },
   } = useForm({
     resolver: zodResolver(projectSchema),
   });
@@ -44,112 +60,86 @@ export default function ProjectDetailPage() {
   });
 
   useEffect(() => {
-    const fetchProject = async () => {
-      try {
-        setLoading(true);
-        setError("");
-        const response = await client.get(`/projects/${id}`);
-        setProject(response.data);
-        resetProject({
-          name: response.data.name || "",
-          description: response.data.description || "",
-          deadline: response.data.deadline
-            ? new Date(response.data.deadline).toISOString().slice(0, 16)
-            : "",
-        });
-      } catch (err) {
-        setError(getApiError(err, "Failed to load project"));
-        setProject(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!project) return;
+    resetProject({
+      name: project.name || "",
+      description: project.description || "",
+      deadline: project.deadline
+        ? new Date(project.deadline).toISOString().slice(0, 16)
+        : "",
+    });
+  }, [project, resetProject]);
 
-    fetchProject();
-  }, [id, resetProject]);
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoadingUsers(true);
-        const response = await client.get("/users/");
-        setUsers(response.data);
-      } catch (err) {
-        setError(getApiError(err, "Failed to load users"));
-      } finally {
-        setLoadingUsers(false);
-      }
-    };
-
-    if (isOwner) {
-      fetchUsers();
-    }
-  }, [isOwner]);
-
-  const updateProject = async (data) => {
-    try {
-      setError("");
+  const updateMutation = useMutation({
+    mutationFn: async (data) => {
       const response = await client.patch(`/projects/${id}`, {
         name: data.name,
         description: data.description || null,
         deadline: data.deadline ? new Date(data.deadline).toISOString() : null,
       });
-      setProject((current) => ({ ...current, ...response.data }));
+      return response.data;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.projects.detail(id), (current) => ({
+        ...current,
+        ...updated,
+      }));
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
       setEditing(false);
-    } catch (err) {
-      setError(getApiError(err, "Failed to update project"));
-    }
-  };
+    },
+    onError: (err) => setError(getApiError(err, "Failed to update project")),
+  });
 
-  const deleteProject = async () => {
-    if (!window.confirm("Are you sure you want to delete this project?")) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      setError("");
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
       await client.delete(`/projects/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
       navigate("/projects");
-    } catch (err) {
-      setError(getApiError(err, "Failed to delete project"));
-      setDeleting(false);
-    }
-  };
+    },
+    onError: (err) => setError(getApiError(err, "Failed to delete project")),
+  });
 
-  const inviteMember = async (data) => {
-    try {
-      setInviting(true);
-      setError("");
+  const inviteMutation = useMutation({
+    mutationFn: async (data) => {
       await client.post(`/projects/${id}/members`, { email: data.email });
-      const projectResponse = await client.get(`/projects/${id}`);
-      setProject(projectResponse.data);
+      return fetchProject(id);
+    },
+    onSuccess: (fresh) => {
+      queryClient.setQueryData(queryKeys.projects.detail(id), fresh);
       resetInvite();
-    } catch (err) {
-      setError(getApiError(err, "Failed to invite member"));
-    } finally {
-      setInviting(false);
-    }
-  };
+    },
+    onError: (err) => setError(getApiError(err, "Failed to invite member")),
+  });
 
-  const removeMember = async (userId) => {
-    if (!window.confirm("Remove this member from the project?")) {
-      return;
-    }
-
-    try {
-      setError("");
+  const removeMemberMutation = useMutation({
+    mutationFn: async (userId) => {
       await client.delete(`/projects/${id}/members/${userId}`);
-      setProject((current) => ({
+      return userId;
+    },
+    onSuccess: (userId) => {
+      queryClient.setQueryData(queryKeys.projects.detail(id), (current) => ({
         ...current,
         members: current.members.filter((member) => member.user_id !== userId),
       }));
-    } catch (err) {
-      setError(getApiError(err, "Failed to remove member"));
-    }
+    },
+    onError: (err) => setError(getApiError(err, "Failed to remove member")),
+  });
+
+  const deleteProject = () => {
+    if (!window.confirm("Are you sure you want to delete this project?")) return;
+    setError("");
+    deleteMutation.mutate();
   };
 
-  if (loading) {
+  const removeMember = (userId) => {
+    if (!window.confirm("Remove this member from the project?")) return;
+    setError("");
+    removeMemberMutation.mutate(userId);
+  };
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-white p-8 text-black dark:bg-gray-950 dark:text-white">
         <p>Loading project...</p>
@@ -160,7 +150,12 @@ export default function ProjectDetailPage() {
   if (!project) {
     return (
       <div className="min-h-screen bg-white p-8 text-black dark:bg-gray-950 dark:text-white">
-        <ErrorBanner message={error || "Project not found"} />
+        <ErrorBanner
+          message={
+            getApiError(projectError, "Failed to load project") ||
+            "Project not found"
+          }
+        />
         <Button className="mt-4" onClick={() => navigate("/projects")}>
           Back to Projects
         </Button>
@@ -228,9 +223,9 @@ export default function ProjectDetailPage() {
                       type="button"
                       variant="destructive"
                       onClick={deleteProject}
-                      disabled={deleting}
+                      disabled={deleteMutation.isPending}
                     >
-                      {deleting ? "Deleting..." : "Delete"}
+                      {deleteMutation.isPending ? "Deleting..." : "Delete"}
                     </Button>
                   </div>
                 )}
@@ -250,7 +245,10 @@ export default function ProjectDetailPage() {
             </>
           ) : (
             <form
-              onSubmit={handleProjectSubmit(updateProject)}
+              onSubmit={handleProjectSubmit((data) => {
+                setError("");
+                updateMutation.mutate(data);
+              })}
               className="space-y-5"
             >
               <h2 className="text-2xl font-bold">Edit Project</h2>
@@ -302,8 +300,8 @@ export default function ProjectDetailPage() {
               </div>
 
               <div className="flex gap-3">
-                <Button type="submit" disabled={updating}>
-                  {updating ? "Saving..." : "Save Changes"}
+                <Button type="submit" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? "Saving..." : "Save Changes"}
                 </Button>
                 <Button
                   type="button"
@@ -349,6 +347,7 @@ export default function ProjectDetailPage() {
                       type="button"
                       variant="destructive"
                       onClick={() => removeMember(member.user_id)}
+                      disabled={removeMemberMutation.isPending}
                     >
                       Remove
                     </Button>
@@ -368,14 +367,17 @@ export default function ProjectDetailPage() {
             <h2 className="text-2xl font-bold">Invite Member</h2>
 
             <form
-              onSubmit={handleInviteSubmit(inviteMember)}
+              onSubmit={handleInviteSubmit((data) => {
+                setError("");
+                inviteMutation.mutate(data);
+              })}
               className="mt-6 flex flex-col gap-3 sm:flex-row"
             >
               <div className="flex-1">
                 <select
                   {...registerInvite("email")}
                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800"
-                  disabled={loadingUsers || inviting}
+                  disabled={loadingUsers || inviteMutation.isPending}
                 >
                   <option value="">
                     {loadingUsers ? "Loading users..." : "Select a member"}
@@ -405,8 +407,11 @@ export default function ProjectDetailPage() {
                 )}
               </div>
 
-              <Button type="submit" disabled={inviting || loadingUsers}>
-                {inviting ? "Inviting..." : "Invite Member"}
+              <Button
+                type="submit"
+                disabled={inviteMutation.isPending || loadingUsers}
+              >
+                {inviteMutation.isPending ? "Inviting..." : "Invite Member"}
               </Button>
             </form>
           </section>

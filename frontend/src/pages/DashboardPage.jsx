@@ -1,18 +1,25 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import client from "@/api/client";
 import ErrorBanner from "@/components/ErrorBanner";
 import { getApiError } from "@/lib/utils";
+import { queryKeys } from "@/api/queryKeys";
+import { fetchDashboardStats } from "@/api/queries";
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [stats, setStats] = useState({ total: 0, in_progress: 0, completed: 0 });
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [error, setError] = useState("");
+  const {
+    data: stats = { total: 0, in_progress: 0, completed: 0 },
+    isLoading: statsLoading,
+    error: statsError,
+  } = useQuery({
+    queryKey: queryKeys.dashboard.stats,
+    queryFn: fetchDashboardStats,
+  });
 
   const [isDark, setIsDark] = useState(
     () => localStorage.getItem("theme") === "dark",
@@ -22,21 +29,6 @@ export default function DashboardPage() {
     document.documentElement.classList.toggle("dark", isDark);
     localStorage.setItem("theme", isDark ? "dark" : "light");
   }, [isDark]);
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setError("");
-        const res = await client.get("/dashboard/stats");
-        setStats(res.data);
-      } catch (err) {
-        setError(getApiError(err, "Failed to load dashboard stats"));
-      } finally {
-        setStatsLoading(false);
-      }
-    };
-    fetchStats();
-  }, []);
 
   const handleLogout = () => {
     logout();
@@ -67,7 +59,13 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <ErrorBanner message={error} />
+        <ErrorBanner
+          message={
+            statsError
+              ? getApiError(statsError, "Failed to load dashboard stats")
+              : ""
+          }
+        />
 
         <div className="mb-8 rounded-xl bg-gradient-to-r from-gray-900 to-gray-900 p-6 text-white shadow">
           <h2 className="text-2xl font-bold">

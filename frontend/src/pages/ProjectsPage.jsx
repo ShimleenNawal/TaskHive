@@ -1,32 +1,22 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import client from "@/api/client";
 import ErrorBanner from "@/components/ErrorBanner";
 import { formatDateShort, getApiError } from "@/lib/utils";
+import { queryKeys } from "@/api/queryKeys";
+import { fetchProjects } from "@/api/queries";
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
 
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        setError("");
-        const response = await client.get("/projects");
-        setProjects(response.data);
-      } catch (err) {
-        setError(getApiError(err, "Failed to load projects"));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProjects();
-  }, []);
+  const {
+    data: projects = [],
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: queryKeys.projects.all,
+    queryFn: fetchProjects,
+  });
 
   return (
     <div className="min-h-screen bg-white text-black dark:bg-gray-950 dark:text-white">
@@ -50,15 +40,15 @@ export default function ProjectsPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <ErrorBanner message={error} />
+        <ErrorBanner
+          message={error ? getApiError(error, "Failed to load projects") : ""}
+        />
 
-        {loading && (
-          <p className="text-gray-600 dark:text-gray-400">
-            Loading projects...
-          </p>
+        {isLoading && (
+          <p className="text-gray-600 dark:text-gray-400">Loading projects...</p>
         )}
 
-        {!loading && projects.length === 0 && !error && (
+        {!isLoading && projects.length === 0 && !error && (
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-8 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <h2 className="text-xl font-semibold">No projects yet</h2>
             <p className="mt-2 text-gray-600 dark:text-gray-400">
@@ -74,7 +64,7 @@ export default function ProjectsPage() {
           </div>
         )}
 
-        {!loading && projects.length > 0 && (
+        {!isLoading && projects.length > 0 && (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => (
               <div

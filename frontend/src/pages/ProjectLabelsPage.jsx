@@ -1,21 +1,22 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import client from "@/api/client";
 import { Button } from "@/components/ui/button";
 import ErrorBanner from "@/components/ErrorBanner";
 import LabelChip from "@/components/LabelChip";
 import { labelSchema } from "@/schemas/labelSchema";
 import { getApiError } from "@/lib/utils";
+import { queryKeys } from "@/api/queryKeys";
+import { fetchLabels, fetchProject } from "@/api/queries";
 
 export default function ProjectLabelsPage() {
   const { id: projectId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [project, setProject] = useState(null);
-  const [labels, setLabels] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
@@ -25,105 +26,82 @@ export default function ProjectLabelsPage() {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm({
     resolver: zodResolver(labelSchema),
     defaultValues: { name: "", color: "#6B7280" },
   });
 
-  const loadData = async () => {
-    try {
-      setError("");
-      const [projectRes, labelsRes] = await Promise.all([
-        client.get(`/projects/${projectId}`),
-        client.get(`/projects/${projectId}/labels`),
-      ]);
-      setProject(projectRes.data);
-      setLabels(labelsRes.data);
-    } catch (err) {
-      setError(getApiError(err, "Failed to load labels"));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const labelsKey = queryKeys.labels.list(projectId);
 
-  useEffect(() => {
-    let cancelled = false;
+  const projectQuery = useQuery({
+    queryKey: queryKeys.projects.detail(projectId),
+    queryFn: () => fetchProject(projectId),
+  });
 
-    async function fetchLabels() {
-      try {
-        setError("");
-        const [projectRes, labelsRes] = await Promise.all([
-          client.get(`/projects/${projectId}`),
-          client.get(`/projects/${projectId}/labels`),
-        ]);
-        if (!cancelled) {
-          setProject(projectRes.data);
-          setLabels(labelsRes.data);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(getApiError(err, "Failed to load labels"));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
+  const labelsQuery = useQuery({
+    queryKey: labelsKey,
+    queryFn: () => fetchLabels(projectId),
+  });
 
-    fetchLabels();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
+  const project = projectQuery.data;
+  const labels = labelsQuery.data || [];
+  const loading = projectQuery.isLoading || labelsQuery.isLoading;
 
-  const onCreate = async (data) => {
-    try {
-      setError("");
+  const createMutation = useMutation({
+    mutationFn: async (data) => {
       await client.post(`/projects/${projectId}/labels`, {
         name: data.name,
         color: data.color || undefined,
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: labelsKey });
       reset({ name: "", color: "#6B7280" });
-      await loadData();
-    } catch (err) {
-      setError(getApiError(err, "Failed to create label"));
-    }
-  };
+    },
+    onError: (err) => setError(getApiError(err, "Failed to create label")),
+  });
 
-  const onDelete = async (labelId) => {
+  const deleteMutation = useMutation({
+    mutationFn: async (labelId) => {
+      await client.delete(`/projects/${projectId}/labels/${labelId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: labelsKey });
+      queryClient.invalidateQueries({
+        queryKey: ["projects", String(projectId), "tasks"],
+      });
+    },
+    onError: (err) => setError(getApiError(err, "Failed to delete label")),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ labelId, name, color }) => {
+      await client.patch(`/projects/${projectId}/labels/${labelId}`, {
+        name,
+        color,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: labelsKey });
+      setEditingId(null);
+    },
+    onError: (err) => setError(getApiError(err, "Failed to update label")),
+  });
+
+  const onDelete = (labelId) => {
     if (
       !window.confirm("Delete this label? It will be removed from all tasks.")
     )
       return;
-    try {
-      setError("");
-      await client.delete(`/projects/${projectId}/labels/${labelId}`);
-      await loadData();
-    } catch (err) {
-      setError(getApiError(err, "Failed to delete label"));
-    }
+    setError("");
+    deleteMutation.mutate(labelId);
   };
 
   const startEdit = (label) => {
     setEditingId(label.id);
     setEditName(label.name);
     setEditColor(label.color);
-  };
-
-  const onSaveEdit = async (labelId) => {
-    try {
-      setError("");
-      await client.patch(`/projects/${projectId}/labels/${labelId}`, {
-        name: editName,
-        color: editColor,
-      });
-      setEditingId(null);
-      await loadData();
-    } catch (err) {
-      setError(getApiError(err, "Failed to update label"));
-    }
   };
 
   if (loading) {
@@ -154,12 +132,25 @@ export default function ProjectLabelsPage() {
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <ErrorBanner message={error} />
+        <ErrorBanner
+          message={
+            error ||
+            (projectQuery.error || labelsQuery.error
+              ? getApiError(
+                  projectQuery.error || labelsQuery.error,
+                  "Failed to load labels",
+                )
+              : "")
+          }
+        />
 
         <section className="mb-8 rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900">
           <h2 className="mb-4 text-xl font-semibold">Create Label</h2>
           <form
-            onSubmit={handleSubmit(onCreate)}
+            onSubmit={handleSubmit((data) => {
+              setError("");
+              createMutation.mutate(data);
+            })}
             className="flex flex-wrap gap-3"
           >
             <div className="min-w-[200px] flex-1">
@@ -181,8 +172,8 @@ export default function ProjectLabelsPage() {
                 className="h-10 w-14 cursor-pointer rounded border border-gray-300 dark:border-gray-700"
               />
             </div>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Creating..." : "Add Label"}
+            <Button type="submit" disabled={createMutation.isPending}>
+              {createMutation.isPending ? "Creating..." : "Add Label"}
             </Button>
           </form>
         </section>
@@ -209,7 +200,18 @@ export default function ProjectLabelsPage() {
                       onChange={(e) => setEditColor(e.target.value)}
                       className="h-10 w-14 cursor-pointer rounded border"
                     />
-                    <Button type="button" onClick={() => onSaveEdit(label.id)}>
+                    <Button
+                      type="button"
+                      disabled={updateMutation.isPending}
+                      onClick={() => {
+                        setError("");
+                        updateMutation.mutate({
+                          labelId: label.id,
+                          name: editName,
+                          color: editColor,
+                        });
+                      }}
+                    >
                       Save
                     </Button>
                     <Button
@@ -235,6 +237,7 @@ export default function ProjectLabelsPage() {
                         type="button"
                         variant="destructive"
                         onClick={() => onDelete(label.id)}
+                        disabled={deleteMutation.isPending}
                       >
                         Delete
                       </Button>
