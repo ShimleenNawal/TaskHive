@@ -6,6 +6,7 @@ import client from "@/api/client";
 import { Button } from "@/components/ui/button";
 import ErrorBanner from "@/components/ErrorBanner";
 import { TaskPriorityBadge, TaskStatusBadge } from "@/components/TaskBadges";
+import TaskKanbanBoard from "@/components/TaskKanbanBoard";
 import { taskSchema } from "@/schemas/taskSchema";
 import { formatDateShort, getApiError } from "@/lib/utils";
 
@@ -20,6 +21,8 @@ export default function ProjectTasksPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [view, setView] = useState("board");
+  const [updatingTaskId, setUpdatingTaskId] = useState(null);
 
   const [filters, setFilters] = useState({
     status: "",
@@ -47,34 +50,6 @@ export default function ProjectTasksPage() {
     },
   });
 
-  const loadData = async () => {
-    try {
-      setError("");
-      const params = {};
-      if (filters.status) params.status = filters.status;
-      if (filters.priority) params.priority = filters.priority;
-      if (filters.assignee_id) params.assignee_id = filters.assignee_id;
-      if (filters.reporter_id) params.reporter_id = filters.reporter_id;
-      if (filters.label_id) params.label_id = filters.label_id;
-      if (filters.sort) params.sort = filters.sort;
-
-      const [projectRes, tasksRes, labelsRes] = await Promise.all([
-        client.get(`/projects/${projectId}`),
-        client.get(`/projects/${projectId}/tasks`, { params }),
-        client.get(`/projects/${projectId}/labels`),
-      ]);
-
-      setProject(projectRes.data);
-      setTasks(tasksRes.data);
-      setLabels(labelsRes.data);
-    } catch (err) {
-      setError(getApiError(err, "Failed to load tasks"));
-    } finally {
-      setInitialLoading(false);
-      setRefreshing(false);
-    }
-  };
-
   useEffect(() => {
     let cancelled = false;
 
@@ -83,7 +58,8 @@ export default function ProjectTasksPage() {
         setRefreshing(true);
         setError("");
         const params = {};
-        if (filters.status) params.status = filters.status;
+        // Board shows all status columns; only apply status filter in list view
+        if (view === "list" && filters.status) params.status = filters.status;
         if (filters.priority) params.priority = filters.priority;
         if (filters.assignee_id) params.assignee_id = filters.assignee_id;
         if (filters.reporter_id) params.reporter_id = filters.reporter_id;
@@ -117,7 +93,35 @@ export default function ProjectTasksPage() {
     return () => {
       cancelled = true;
     };
-  }, [projectId, filters]);
+  }, [projectId, filters, view]);
+
+  const loadData = async () => {
+    try {
+      setError("");
+      const params = {};
+      if (view === "list" && filters.status) params.status = filters.status;
+      if (filters.priority) params.priority = filters.priority;
+      if (filters.assignee_id) params.assignee_id = filters.assignee_id;
+      if (filters.reporter_id) params.reporter_id = filters.reporter_id;
+      if (filters.label_id) params.label_id = filters.label_id;
+      if (filters.sort) params.sort = filters.sort;
+
+      const [projectRes, tasksRes, labelsRes] = await Promise.all([
+        client.get(`/projects/${projectId}`),
+        client.get(`/projects/${projectId}/tasks`, { params }),
+        client.get(`/projects/${projectId}/labels`),
+      ]);
+
+      setProject(projectRes.data);
+      setTasks(tasksRes.data);
+      setLabels(labelsRes.data);
+    } catch (err) {
+      setError(getApiError(err, "Failed to load tasks"));
+    } finally {
+      setInitialLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   const onCreateTask = async (data) => {
     try {
@@ -149,6 +153,37 @@ export default function ProjectTasksPage() {
     }
   };
 
+  const onStatusChange = async (task, nextStatus) => {
+    const previousStatus = task.status;
+    setError("");
+    setUpdatingTaskId(task.id);
+    setTasks((current) =>
+      current.map((item) =>
+        item.id === task.id ? { ...item, status: nextStatus } : item,
+      ),
+    );
+
+    try {
+      const res = await client.put(`/projects/${projectId}/tasks/${task.id}`, {
+        status: nextStatus,
+      });
+      setTasks((current) =>
+        current.map((item) =>
+          item.id === task.id ? { ...item, ...res.data } : item,
+        ),
+      );
+    } catch (err) {
+      setTasks((current) =>
+        current.map((item) =>
+          item.id === task.id ? { ...item, status: previousStatus } : item,
+        ),
+      );
+      setError(getApiError(err, "Failed to update task status"));
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  };
+
   if (initialLoading && !project) {
     return (
       <div className="min-h-screen bg-white p-8 dark:bg-gray-950 dark:text-white">
@@ -160,7 +195,7 @@ export default function ProjectTasksPage() {
   return (
     <div className="min-h-screen bg-white text-black dark:bg-gray-950 dark:text-white">
       <header className="border-b border-gray-200 dark:border-gray-800">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div>
             <Button
               type="button"
@@ -176,10 +211,24 @@ export default function ProjectTasksPage() {
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
+              variant={view === "board" ? "default" : "outline"}
+              onClick={() => setView("board")}
+            >
+              Task Board
+            </Button>
+            <Button
+              type="button"
+              variant={view === "list" ? "default" : "outline"}
+              onClick={() => setView("list")}
+            >
+              Task List
+            </Button>
+            <Button
+              type="button"
               variant="outline"
               onClick={() => navigate(`/projects/${projectId}/labels`)}
             >
-              Labels
+              Task Labels
             </Button>
             <Button type="button" onClick={() => setShowCreate((v) => !v)}>
               {showCreate ? "Cancel" : "+ New Task"}
@@ -188,7 +237,7 @@ export default function ProjectTasksPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-7xl px-4 py-8">
         <ErrorBanner message={error} />
 
         {showCreate && (
@@ -282,19 +331,23 @@ export default function ProjectTasksPage() {
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
             Filters
           </h2>
-          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-            <select
-              value={filters.status}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, status: e.target.value }))
-              }
-              className="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
-            >
-              <option value="">All statuses</option>
-              <option value="TODO">TODO</option>
-              <option value="IN_PROGRESS">IN PROGRESS</option>
-              <option value="DONE">DONE</option>
-            </select>
+          <div
+            className={`grid gap-3 md:grid-cols-3 ${view === "board" ? "lg:grid-cols-5" : "lg:grid-cols-6"}`}
+          >
+            {view === "list" && (
+              <select
+                value={filters.status}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, status: e.target.value }))
+                }
+                className="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+              >
+                <option value="">All statuses</option>
+                <option value="TODO">TODO</option>
+                <option value="IN_PROGRESS">IN PROGRESS</option>
+                <option value="DONE">DONE</option>
+              </select>
+            )}
             <select
               value={filters.priority}
               onChange={(e) =>
@@ -370,6 +423,24 @@ export default function ProjectTasksPage() {
           <p className="text-gray-600 dark:text-gray-400">
             Refreshing tasks...
           </p>
+        ) : view === "board" ? (
+          tasks.length === 0 ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-8 text-center dark:border-gray-800 dark:bg-gray-900">
+              <p className="text-gray-600 dark:text-gray-400">
+                No tasks match your filters.
+              </p>
+            </div>
+          ) : (
+            <TaskKanbanBoard
+              tasks={tasks}
+              members={project?.members || []}
+              updatingTaskId={updatingTaskId}
+              onStatusChange={onStatusChange}
+              onOpenTask={(taskId) =>
+                navigate(`/projects/${projectId}/tasks/${taskId}`)
+              }
+            />
+          )
         ) : tasks.length === 0 ? (
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-8 text-center dark:border-gray-800 dark:bg-gray-900">
             <p className="text-gray-600 dark:text-gray-400">
