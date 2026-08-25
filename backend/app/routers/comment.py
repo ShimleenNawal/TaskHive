@@ -119,8 +119,7 @@ def update_comment(
     db.commit()
     db.refresh(comment)
 
-    author = db.query(User).filter(User.id == comment.author_id).first()
-    return to_comment_out(comment, author.name if author else current_user.name)
+    return to_comment_out(comment, current_user.name)
 
 
 @router.delete("/projects/{project_id}/tasks/{task_id}/comments/{comment_id}")
