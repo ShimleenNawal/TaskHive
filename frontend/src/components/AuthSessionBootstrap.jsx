@@ -1,11 +1,7 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import client from "@/api/client";
-import {
-  clearCredentials,
-  selectAccessToken,
-  setUser,
-} from "@/store/authSlice";
+import { selectAccessToken, setUser } from "@/store/authSlice";
 
 /**
  * After Redux Persist rehydrates a session, quietly refresh /users/me.
@@ -28,10 +24,9 @@ export default function AuthSessionBootstrap() {
           dispatch(setUser(res.data));
         }
       })
-      .catch(() => {
-        if (!cancelled) {
-          dispatch(clearCredentials());
-        }
+      .catch((err) => {
+        if (cancelled) return;
+        if (err.response?.status === 401) return;
       });
 
     return () => {
