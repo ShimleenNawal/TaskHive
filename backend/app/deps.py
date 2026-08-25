@@ -1,9 +1,10 @@
 from fastapi import HTTPException
 from app.models.project import Project, ProjectMember
 from app.models.task import Task
+from sqlalchemy.orm import Session
 
 
-def require_project_member(project_id: int, user_id: int, db):
+def require_project_member(project_id: int, user_id: int, db: Session) -> ProjectMember:
     membership = (
         db.query(ProjectMember)
         .filter(
