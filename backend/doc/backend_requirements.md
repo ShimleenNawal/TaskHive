@@ -36,7 +36,7 @@ Routers: [`app/routers/routes.py`](../app/routers/routes.py) includes `auth`, `u
 | Member invite/remove | Non-owner gets **403** (project existence is revealed if the project id exists). |
 | Unique conflicts | **409** |
 | Validation | **422** (Pydantic / FastAPI). `detail` is an array of error objects. |
-| Creates | FastAPI default **200**, except comment create **201**. |
+| Creates | Task, label, task-label tag, and comment creates return **201**. Other POSTs (auth, projects, members) remain **200**. |
 | Collections | JSON arrays. Tasks, labels, and comments list endpoints support `limit` (default 50, max 200) and `offset` (default 0). |
 | Dates | ISO 8601 timezone-aware datetimes. |
 | Passwords | Argon2 (`app/services/auth_service.py`). |
@@ -385,7 +385,7 @@ Title max 255. Description is optional long text (no 255-char request cap).
 
 Member. **Body:** `{ "title", "description"?, "status"?, "priority"?, "due_date"?, "assignee_id"? }`
 
-**200:** `TaskOut` with `reporter_id = current_user.id`
+**201:** `TaskOut` with `reporter_id = current_user.id`
 
 **Errors:** **404** `"Project not found"` · **400** `"Assignee must be a member of this project"` · **422**
 
@@ -427,11 +427,7 @@ Any project member. Name trimmed, 1–50 chars, unique per project. Color option
 
 **Body:** `{ "name", "color"? }`
 
-**200:** `LabelOut`
-
-**Errors:** **404** `"Project not found"` · **409** `"Label name already exists"` · **422**
-
-#### `GET /api/projects/{project_id}/labels`
+**201:** `LabelOut`
 
 Query: `limit` (default 50, max 200), `offset` (default 0).
 
@@ -461,7 +457,7 @@ Label and task must share `project_id`. Duplicate tag is **409**. Untag does not
 
 **Body:** `{ "label_id": int }`
 
-**200:** `TaskDetailOut`
+**201:** `TaskDetailOut`
 
 **Errors:** **400** `"Label must belong to the same project as the task"` · **404** project / task / `"Label not found"` · **409** `"Label is already attached to this task"`
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.deps import require_project_member, get_task_in_project
@@ -29,7 +29,11 @@ def get_label_in_project(project_id: int, label_id: int, db):
     return label
 
 
-@router.post("/projects/{project_id}/labels", response_model=LabelOut)
+@router.post(
+    "/projects/{project_id}/labels",
+    response_model=LabelOut,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_label(
     project_id: int,
     label_data: LabelCreate,
@@ -142,6 +146,7 @@ def delete_label(
 @router.post(
     "/projects/{project_id}/tasks/{task_id}/labels",
     response_model=TaskDetailOut,
+    status_code=status.HTTP_201_CREATED,
 )
 def tag_task(
     project_id: int,

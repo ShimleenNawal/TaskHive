@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import case, nulls_last
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -90,7 +90,7 @@ def to_task_detail(task: Task, db) -> TaskDetailOut:
     )
 
 
-@router.post("/projects/{project_id}/tasks", response_model=TaskOut)
+@router.post("/projects/{project_id}/tasks", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
 def create_task(
     project_id: int,
     task: TaskCreate,
