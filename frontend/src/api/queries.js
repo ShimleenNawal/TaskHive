@@ -21,7 +21,9 @@ export async function fetchUsers() {
 }
 
 export async function fetchTasks(projectId, params = {}) {
-  const { data } = await client.get(`/projects/${projectId}/tasks`, { params });
+  const { data } = await client.get(`/projects/${projectId}/tasks`, {
+    params: { limit: 200, ...params },
+  });
   return data;
 }
 
@@ -31,13 +33,16 @@ export async function fetchTask(projectId, taskId) {
 }
 
 export async function fetchLabels(projectId) {
-  const { data } = await client.get(`/projects/${projectId}/labels`);
+  const { data } = await client.get(`/projects/${projectId}/labels`, {
+    params: { limit: 200 },
+  });
   return data;
 }
 
 export async function fetchComments(projectId, taskId) {
   const { data } = await client.get(
     `/projects/${projectId}/tasks/${taskId}/comments`,
+    { params: { limit: 200 } },
   );
   return data;
 }

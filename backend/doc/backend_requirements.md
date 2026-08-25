@@ -37,7 +37,7 @@ Routers: [`app/routers/routes.py`](../app/routers/routes.py) includes `auth`, `u
 | Unique conflicts | **409** |
 | Validation | **422** (Pydantic / FastAPI). `detail` is an array of error objects. |
 | Creates | FastAPI default **200**, except comment create **201**. |
-| Collections | JSON arrays; no pagination. |
+| Collections | JSON arrays. Tasks, labels, and comments list endpoints support `limit` (default 50, max 200) and `offset` (default 0). |
 | Dates | ISO 8601 timezone-aware datetimes. |
 | Passwords | Argon2 (`app/services/auth_service.py`). |
 | CORS | `BACKEND_CORS_ORIGINS` from env; methods GET/POST/PUT/PATCH/DELETE/OPTIONS; headers Authorization, Content-Type. |
@@ -391,9 +391,9 @@ Member. **Body:** `{ "title", "description"?, "status"?, "priority"?, "due_date"
 
 #### `GET /api/projects/{project_id}/tasks`
 
-Member. Query (all optional): `status`, `priority`, `sort` (`due_date` | `created_at` | `priority` | `status` | `title`), `assignee_id`, `reporter_id`, `label_id`.
+Member. Query (all optional): `status`, `priority`, `sort` (`due_date` | `created_at` | `priority` | `status` | `title`), `assignee_id`, `reporter_id`, `label_id`, `limit` (default 50, max 200), `offset` (default 0).
 
-Default sort: `created_at` desc. `sort=due_date`: asc, nulls last. Other sorts: asc.
+Default sort: `created_at` desc. `sort=due_date`: asc, nulls last. `sort=priority`: HIGH → MEDIUM → LOW. `sort=status`: TODO → IN_PROGRESS → DONE. Other sorts: asc.
 
 **200:** `[TaskOut, ...]` — no nested `labels`. Filter by `label_id` for tagged tasks.
 
@@ -432,6 +432,8 @@ Any project member. Name trimmed, 1–50 chars, unique per project. Color option
 **Errors:** **404** `"Project not found"` · **409** `"Label name already exists"` · **422**
 
 #### `GET /api/projects/{project_id}/labels`
+
+Query: `limit` (default 50, max 200), `offset` (default 0).
 
 **200:** `[LabelOut, ...]` ordered by name. Empty `[]`.
 
@@ -476,6 +478,8 @@ Label and task must share `project_id`. Duplicate tag is **409**. Untag does not
 Body required, trimmed, non-empty. `author_id` is the current user. Ordered by `created_at` asc.
 
 #### `GET /api/projects/{project_id}/tasks/{task_id}/comments`
+
+Query: `limit` (default 50, max 200), `offset` (default 0).
 
 **200:** `[CommentOut, ...]` or `[]`
 

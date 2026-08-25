@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.deps import require_project_member, get_task_in_project
@@ -66,6 +66,8 @@ def create_label(
 @router.get("/projects/{project_id}/labels", response_model=list[LabelOut])
 def list_labels(
     project_id: int,
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db=Depends(get_db),
 ):
@@ -75,6 +77,8 @@ def list_labels(
         db.query(Label)
         .filter(Label.project_id == project_id)
         .order_by(Label.name.asc())
+        .limit(limit)
+        .offset(offset)
         .all()
     )
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.deps import require_project_member, get_task_in_project, get_project_or_404
@@ -44,6 +44,8 @@ def to_comment_out(comment: Comment, author_name: str) -> CommentOut:
 def list_comments(
     project_id: int,
     task_id: int,
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db=Depends(get_db),
 ):
@@ -55,6 +57,8 @@ def list_comments(
         .join(User, User.id == Comment.author_id)
         .filter(Comment.task_id == task_id)
         .order_by(Comment.created_at.asc())
+        .limit(limit)
+        .offset(offset)
         .all()
     )
 

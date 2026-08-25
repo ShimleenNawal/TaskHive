@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, nulls_last
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -127,6 +127,8 @@ def list_tasks(
     assignee_id: int | None = None,
     reporter_id: int | None = None,
     label_id: int | None = None,
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db=Depends(get_db),
 ):
@@ -162,7 +164,7 @@ def list_tasks(
     else:
         query = query.order_by(Task.created_at.desc())
 
-    return query.all()
+    return query.limit(limit).offset(offset).all()
 
 
 @router.get(
