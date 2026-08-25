@@ -269,6 +269,36 @@ def test_resend_verification_validates_email(client):
     assert response.status_code == 422
 
 
+def test_resend_verification_rate_limited(client, db):
+    user = User(
+        name="Test User",
+        email="test@example.com",
+        hashed_password=hash_password("TestPassword123!"),
+        is_verified=False,
+        verification_token="old-token",
+        token_expires_at=datetime.now(timezone.utc)
+        + timedelta(hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS),
+    )
+
+    db.add(user)
+    db.commit()
+
+    first = client.post(
+        "/api/auth/resend-verification",
+        json={"email": "test@example.com"},
+    )
+    assert first.status_code == 200
+
+    second = client.post(
+        "/api/auth/resend-verification",
+        json={"email": "test@example.com"},
+    )
+    assert second.status_code == 429
+    assert second.json()["detail"] == (
+        "Please wait before requesting another verification email"
+    )
+
+
 def test_login_success(client, db):
     user = User(
         name="Test User",

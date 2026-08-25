@@ -14,6 +14,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import ProjectsPage from "./pages/ProjectsPage";
 import CreateProjectPage from "./pages/CreateProjectPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<Navigate to="/signup" replace />} />
+          <Route path="/verify" element={<VerifyEmailPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<DashboardPage />} />

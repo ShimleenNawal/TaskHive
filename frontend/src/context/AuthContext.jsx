@@ -48,9 +48,21 @@ export function AuthProvider({ children }) {
     // After signup, user sees "check your email" — don't auto-login yet
   };
 
+  const resendVerification = async (email) => {
+    return await client.post("/auth/resend-verification", { email });
+  };
+
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, user, loading, login, logout, signup }}
+      value={{
+        isAuthenticated,
+        user,
+        loading,
+        login,
+        logout,
+        signup,
+        resendVerification,
+      }}
     >
       {children}
     </AuthContext.Provider>
