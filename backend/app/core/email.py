@@ -15,9 +15,7 @@ conf = ConnectionConfig(
 
 
 async def send_verification_email(email: str, token: str):
-    verification_link = (
-        f"http://localhost:5174/verify?token={token}"
-    )
+    verification_link = f"{settings.FRONTEND_URL.rstrip('/')}/verify?token={token}"
 
     message = MessageSchema(
         subject="Verify your TaskHive account",
