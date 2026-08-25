@@ -65,7 +65,7 @@ Local dev (Docker Compose): frontend `:5174`, backend `:8000`. CORS on the backe
 | Piece | Role |
 |---|---|
 | `api/queryClient.js` | Shared `QueryClient` (30s staleTime, 1 retry, no refetch on focus) |
-| `api/queryKeys.js` | Query key factory for dashboard, projects, tasks, labels, comments, users |
+| `api/queryKeys.js` | Query key factory; `authQueryKey(base, userId)` scopes cache entries per user |
 | `api/queries.js` | Axios fetch helpers used by `queryFn` |
 
 Pages use `useQuery` for reads and `useMutation` for writes, with `invalidateQueries` / `setQueryData` after mutations. Kanban status changes use optimistic updates via `onMutate` / rollback on error.
@@ -78,11 +78,11 @@ Auth JWT + user remain in Redux (not React Query).
 
 **Fast path:** Protected routes use the rehydrated token/user immediately. They do **not** block on a network `/users/me` call.
 
-**Background revalidation:** `AuthSessionBootstrap` quietly calls `GET /users/me` after rehydrate. On success it refreshes `user`; on failure (expired/invalid token) it clears credentials.
+**Background revalidation:** `AuthSessionBootstrap` quietly calls `GET /users/me` after rehydrate. On success it refreshes `user`. On **401** the axios interceptor clears credentials and redirects; on transient/network/5xx errors the persisted session is kept unchanged.
 
-**Login (`hooks/useAuth.js`):** `POST /auth/login` → `setCredentials` with token → `GET /users/me` → `setCredentials` with token + user (then persisted).
+**Login (`hooks/useAuth.js`):** `POST /auth/login` → `setCredentials` with token → `resetQueryCache()` → `GET /users/me` → `setCredentials` with token + user (then persisted).
 
-**Logout:** `clearCredentials()` in Redux (persist writes the cleared session), then navigate to `/login`. No server revoke endpoint (matches backend).
+**Logout:** `resetQueryCache()` (cancel in-flight fetches + clear cache) then `clearCredentials()` in Redux (persist writes the cleared session), then navigate to `/login`. Query keys are also scoped by user id so a new session never reads another user's cache entries. No server revoke endpoint (matches backend).
 
 **Signup:** `POST /auth/signup`; user is prompted to verify email (no auto-login).
 
@@ -116,8 +116,10 @@ Pages display errors through `ErrorBanner`.
 
 - `formatDate(value)` — full locale datetime (task detail, comments)
 - `formatDateShort(value)` — date only (lists, project cards)
+- `toDatetimeLocalValue(isoString)` — ISO → local `YYYY-MM-DDTHH:mm` for `<input type="datetime-local">` pre-fill
+- `datetimeLocalToIso(localString)` — datetime-local input value → ISO UTC for API submit
 
-Datetime-local inputs use `.toISOString().slice(0, 16)` when pre-filling from API responses.
+Datetime-local forms use these helpers so pre-fill and submit both use local wall clock (avoids UTC slice drift on each edit cycle).
 
 ---
 
@@ -409,7 +411,7 @@ frontend/src/
 │   ├── TaskBadges.jsx
 │   ├── TaskKanbanBoard.jsx
 │   └── ui/button.jsx, input.jsx
-├── lib/utils.js               # cn, getApiError, formatDate*
+├── lib/utils.js               # cn, getApiError, formatDate*, datetime-local helpers
 ├── schemas/
 │   ├── projectSchema.js
 │   ├── taskSchema.js
