@@ -8,14 +8,16 @@ import { Button } from "@/components/ui/button";
 import ErrorBanner from "@/components/ErrorBanner";
 import LabelChip from "@/components/LabelChip";
 import { labelSchema } from "@/schemas/labelSchema";
+import { useAuth } from "@/hooks/useAuth";
 import { getApiError } from "@/lib/utils";
-import { queryKeys } from "@/api/queryKeys";
+import { authQueryKey, queryKeys } from "@/api/queryKeys";
 import { fetchLabels, fetchProject } from "@/api/queries";
 
 export default function ProjectLabelsPage() {
   const { id: projectId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -32,16 +34,18 @@ export default function ProjectLabelsPage() {
     defaultValues: { name: "", color: "#6B7280" },
   });
 
-  const labelsKey = queryKeys.labels.list(projectId);
+  const labelsKey = authQueryKey(queryKeys.labels.list(projectId), user?.id);
 
   const projectQuery = useQuery({
-    queryKey: queryKeys.projects.detail(projectId),
+    queryKey: authQueryKey(queryKeys.projects.detail(projectId), user?.id),
     queryFn: () => fetchProject(projectId),
+    enabled: Boolean(user?.id),
   });
 
   const labelsQuery = useQuery({
     queryKey: labelsKey,
     queryFn: () => fetchLabels(projectId),
+    enabled: Boolean(user?.id),
   });
 
   const project = projectQuery.data;

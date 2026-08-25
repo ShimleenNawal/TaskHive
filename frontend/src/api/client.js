@@ -1,5 +1,6 @@
 import axios from "axios";
 import { store } from "@/store";
+import { resetQueryCache } from "@/api/resetQueryCache";
 import { clearCredentials } from "@/store/authSlice";
 
 const client = axios.create({
@@ -27,6 +28,7 @@ client.interceptors.response.use(
       url.includes("/api/auth/resend-verification");
 
     if (status === 401 && !isAuthRequest) {
+      void resetQueryCache();
       store.dispatch(clearCredentials());
       window.location.href = "/login";
     }

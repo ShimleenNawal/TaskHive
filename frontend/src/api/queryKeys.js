@@ -1,3 +1,8 @@
+/* Append the current user id so cached data cannot leak across sessions. */
+export function authQueryKey(baseKey, userId) {
+  return userId != null ? [...baseKey, userId] : baseKey;
+}
+
 export const queryKeys = {
   dashboard: {
     stats: ["dashboard", "stats"],

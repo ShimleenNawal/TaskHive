@@ -2,20 +2,23 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import ErrorBanner from "@/components/ErrorBanner";
+import { useAuth } from "@/hooks/useAuth";
 import { formatDateShort, getApiError } from "@/lib/utils";
-import { queryKeys } from "@/api/queryKeys";
+import { authQueryKey, queryKeys } from "@/api/queryKeys";
 import { fetchProjects } from "@/api/queries";
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const {
     data: projects = [],
     isLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.projects.all,
+    queryKey: authQueryKey(queryKeys.projects.all, user?.id),
     queryFn: fetchProjects,
+    enabled: Boolean(user?.id),
   });
 
   return (

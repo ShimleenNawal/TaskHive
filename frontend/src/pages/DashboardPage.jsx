@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import ErrorBanner from "@/components/ErrorBanner";
 import { getApiError } from "@/lib/utils";
-import { queryKeys } from "@/api/queryKeys";
+import { authQueryKey, queryKeys } from "@/api/queryKeys";
 import { fetchDashboardStats } from "@/api/queries";
 
 export default function DashboardPage() {
@@ -17,8 +17,9 @@ export default function DashboardPage() {
     isLoading: statsLoading,
     error: statsError,
   } = useQuery({
-    queryKey: queryKeys.dashboard.stats,
+    queryKey: authQueryKey(queryKeys.dashboard.stats, user?.id),
     queryFn: fetchDashboardStats,
+    enabled: Boolean(user?.id),
   });
 
   const [isDark, setIsDark] = useState(
@@ -30,8 +31,8 @@ export default function DashboardPage() {
     localStorage.setItem("theme", isDark ? "dark" : "light");
   }, [isDark]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 

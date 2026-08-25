@@ -1,5 +1,6 @@
 import { useDispatch, useSelector } from "react-redux";
 import client from "@/api/client";
+import { resetQueryCache } from "@/api/resetQueryCache";
 import {
   clearCredentials,
   selectIsAuthenticated,
@@ -18,12 +19,14 @@ export function useAuth() {
 
     // Store token first so the interceptor can authorize /users/me
     dispatch(setCredentials({ accessToken, user: null }));
+    await resetQueryCache();
 
     const userRes = await client.get("/users/me");
     dispatch(setCredentials({ accessToken, user: userRes.data }));
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await resetQueryCache();
     dispatch(clearCredentials());
   };
 
