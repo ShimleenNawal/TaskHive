@@ -1,19 +1,20 @@
 import axios from "axios";
+import { store } from "@/store";
+import { resetQueryCache } from "@/api/resetQueryCache";
+import { clearCredentials } from "@/store/authSlice";
 
 const client = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
 });
 
-// Inject JWT on every request
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
+  const token = store.getState().auth.accessToken;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// On 401, clear localStorage and redirect to login
 client.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -27,7 +28,8 @@ client.interceptors.response.use(
       url.includes("/api/auth/resend-verification");
 
     if (status === 401 && !isAuthRequest) {
-      localStorage.clear();
+      void resetQueryCache();
+      store.dispatch(clearCredentials());
       window.location.href = "/login";
     }
 
