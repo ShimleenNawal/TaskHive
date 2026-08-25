@@ -223,7 +223,7 @@ Datetime-local forms use these helpers so pre-fill and submit both use local wal
 - `GET /projects/:id` (members for assignee/reporter names, owner check)
 - `GET /projects/:id/labels` (available labels for tagging)
 - `GET /projects/:id/tasks/:taskId/comments`
-- `PUT /projects/:id/tasks/:taskId`
+- `PATCH /projects/:id/tasks/:taskId`
 - `DELETE /projects/:id/tasks/:taskId`
 - `POST /projects/:id/tasks/:taskId/labels` body `{ label_id }`
 - `DELETE /projects/:id/tasks/:taskId/labels/:labelId`
@@ -321,7 +321,7 @@ Every **implemented** backend endpoint (per `backend/doc/backend_requirements.md
 | POST | `/projects/{id}/tasks` | ProjectTasksPage |
 | GET | `/projects/{id}/tasks` | ProjectTasksPage (with filters) |
 | GET | `/projects/{id}/tasks/{task_id}` | TaskDetailPage |
-| PUT | `/projects/{id}/tasks/{task_id}` | TaskDetailPage |
+| PATCH | `/projects/{id}/tasks/{task_id}` | TaskDetailPage, ProjectTasksPage (status) |
 | DELETE | `/projects/{id}/tasks/{task_id}` | ProjectTasksPage, TaskDetailPage |
 | POST | `/projects/{id}/labels` | ProjectLabelsPage |
 | GET | `/projects/{id}/labels` | ProjectLabelsPage, ProjectTasksPage, TaskDetailPage |
