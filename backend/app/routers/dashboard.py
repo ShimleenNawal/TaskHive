@@ -21,30 +21,17 @@ def get_dashboard_stats(
         .subquery()
     )
 
-    total = (
-        db.query(func.count(Task.id))
+    row = (
+        db.query(
+            func.count(Task.id).label("total"),
+            func.count(case((Task.status == "IN_PROGRESS", 1))).label("in_progress"),
+            func.count(case((Task.status == "DONE", 1))).label("completed"),
+        )
         .filter(Task.project_id.in_(member_projects))
-        .scalar()
-        or 0
+        .one()
     )
-    in_progress = (
-        db.query(func.count(Task.id))
-        .filter(
-            Task.project_id.in_(member_projects),
-            Task.status == "IN_PROGRESS",
-        )
-        .scalar()
-        or 0
-    )
-    completed = (
-        db.query(func.count(Task.id))
-        .filter(
-            Task.project_id.in_(member_projects),
-            Task.status == "DONE",
-        )
-        .scalar()
-        or 0
-    )
+
+    return {"total": row.total, "in_progress": row.in_progress, "completed": row.completed}
 
     return {
         "total": total,
