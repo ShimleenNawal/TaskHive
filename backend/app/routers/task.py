@@ -182,7 +182,7 @@ def get_task(
     return to_task_detail(task, db)
 
 
-@router.put("/projects/{project_id}/tasks/{task_id}", response_model=TaskOut)
+@router.patch("/projects/{project_id}/tasks/{task_id}", response_model=TaskOut)
 def update_task(
     project_id: int,
     task_id: int,
