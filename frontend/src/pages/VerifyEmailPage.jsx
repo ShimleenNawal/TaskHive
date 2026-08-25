@@ -1,6 +1,21 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+function formatErrorDetail(detail) {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item.msg === "string") return item.msg;
+        return null;
+      })
+      .filter(Boolean);
+    if (messages.length > 0) return messages.join(" ");
+  }
+  return null;
+}
+
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -33,10 +48,30 @@ export default function VerifyEmailPage() {
           },
         );
 
-        const data = await response.json();
+        const bodyText = await response.text();
+        const contentType = response.headers.get("content-type") || "";
+        const isJson = contentType.includes("application/json");
+
+        let data = null;
+        if (isJson && bodyText) {
+          try {
+            data = JSON.parse(bodyText);
+          } catch {
+            data = null;
+          }
+        }
 
         if (!response.ok) {
-          throw new Error(data.detail || "Email verification failed.");
+          const detailMessage = formatErrorDetail(data?.detail);
+          throw new Error(
+            detailMessage || "Email verification failed. Please try again.",
+          );
+        }
+
+        if (!isJson || data === null) {
+          throw new Error(
+            "Unexpected response from the server. Please try again.",
+          );
         }
 
         setStatus("success");

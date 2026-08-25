@@ -134,7 +134,7 @@ export default function ProjectTasksPage() {
 
   const statusMutation = useMutation({
     mutationFn: async ({ taskId, status }) => {
-      const res = await client.put(`/projects/${projectId}/tasks/${taskId}`, {
+      const res = await client.patch(`/projects/${projectId}/tasks/${taskId}`, {
         status,
       });
       return res.data;

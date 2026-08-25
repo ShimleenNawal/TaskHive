@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import func
+from sqlalchemy import case, func
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -31,10 +31,8 @@ def get_dashboard_stats(
         .one()
     )
 
-    return {"total": row.total, "in_progress": row.in_progress, "completed": row.completed}
-
     return {
-        "total": total,
-        "in_progress": in_progress,
-        "completed": completed,
+        "total": row.total,
+        "in_progress": row.in_progress,
+        "completed": row.completed,
     }

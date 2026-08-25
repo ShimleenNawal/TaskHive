@@ -3,53 +3,67 @@ from fastapi import APIRouter, HTTPException
 from app.core.database import get_db
 from app.core.security import create_access_token
 from app.core.email import send_verification_email
-from app.models.user import User 
+from app.core.rate_limit import resend_verification_limiter
+from app.models.user import User
 from app.schemas.user import UserCreate, UserOut, LoginRequest, LoginResponse, ResendRequest
 from app.services.auth_service import hash_password, verify_password
-from app.core.config import settings 
+from app.core.config import settings
+import logging
 import secrets
-from datetime import datetime, timedelta, timezone 
- 
+from datetime import datetime, timedelta, timezone
 
-router = APIRouter(prefix = "/auth", tags = ["auth"])
 
-@router.post("/signup", response_model = UserOut)
-async def signup(user_data: UserCreate, db = Depends(get_db)):
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/signup", response_model=UserOut)
+async def signup(user_data: UserCreate, db=Depends(get_db)):
     # Check if email already exists in db
-    if db.query(User).filter(User.email == user_data.email).first(): 
-        raise HTTPException(status_code = 409, detail = "Email already exists")
+    if db.query(User).filter(User.email == user_data.email).first():
+        raise HTTPException(status_code=409, detail="Email already exists")
 
     # Otherwise, create user
     verification_token = secrets.token_urlsafe(32)
-    token_expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS)
+    token_expires_at = datetime.now(timezone.utc) + timedelta(
+        hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS
+    )
 
     new_user = User(
-        name = user_data.name,
-        email = user_data.email,
-        hashed_password = hash_password(user_data.password),
-        is_verified = False,
-        verification_token = verification_token,
-        token_expires_at = token_expires_at,
+        name=user_data.name,
+        email=user_data.email,
+        hashed_password=hash_password(user_data.password),
+        is_verified=False,
+        verification_token=verification_token,
+        token_expires_at=token_expires_at,
     )
 
     db.add(new_user)
     db.commit()
-    db.refresh(new_user) 
+    db.refresh(new_user)
 
-    await send_verification_email(
-    user_data.email,
-    verification_token,
-    )
+    # User row is already committed; do not fail signup if SMTP is down.
+    # Client can use /resend-verification to get the link later.
+    try:
+        await send_verification_email(user_data.email, verification_token)
+    except Exception:
+        logger.exception(
+            "Failed to send verification email after signup for %s",
+            user_data.email,
+        )
+
     return new_user
 
+
 @router.get("/verify")
-def verify_email(token: str, db = Depends(get_db)):
-    user = db.query(User).filter(User.verification_token == token).first() 
+def verify_email(token: str, db=Depends(get_db)):
+    user = db.query(User).filter(User.verification_token == token).first()
     if not user:
-        raise HTTPException(status_code = 404, detail = "Token not found")
+        raise HTTPException(status_code=404, detail="Token not found")
 
     if datetime.now(timezone.utc) > user.token_expires_at:
-            raise HTTPException(status_code = 400, detail = "Token expired")
+        raise HTTPException(status_code=400, detail="Token expired")
 
     user.is_verified = True
     user.verification_token = None
@@ -57,34 +71,53 @@ def verify_email(token: str, db = Depends(get_db)):
     db.commit()
     return {"status": "verified"}
 
+
 @router.post("/resend-verification")
-async def resend_verification(body: ResendRequest, db = Depends(get_db)):
-    user = db.query(User).filter(User.email == body.email).first() 
+async def resend_verification(body: ResendRequest, db=Depends(get_db)):
+    user = db.query(User).filter(User.email == body.email).first()
     if not user:
-        raise HTTPException(status_code = 404, detail = "User not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     if user.is_verified:
-        raise HTTPException(status_code = 409, detail = "User already verified")
+        raise HTTPException(status_code=409, detail="User already verified")
+
+    email_key = body.email.strip().lower()
+    if not resend_verification_limiter.is_allowed(email_key):
+        raise HTTPException(
+            status_code=429,
+            detail="Please wait before requesting another verification email",
+        )
 
     # Generate new token
     user.verification_token = secrets.token_urlsafe(32)
-    user.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS)
-    db.commit()
-    await send_verification_email(
-    user.email,
-    user.verification_token,
+    user.token_expires_at = datetime.now(timezone.utc) + timedelta(
+        hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS
     )
+    db.commit()
+
+    try:
+        await send_verification_email(user.email, user.verification_token)
+    except Exception:
+        logger.exception(
+            "Failed to send verification email on resend for %s",
+            user.email,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to send verification email. Please try again later.",
+        )
+
     return {"status": "new token sent"}
 
-@router.post("/login", response_model = LoginResponse)
-def login(credentials: LoginRequest, db = Depends(get_db)):
-    user = db.query(User).filter(User.email == credentials.email).first() 
+
+@router.post("/login", response_model=LoginResponse)
+def login(credentials: LoginRequest, db=Depends(get_db)):
+    user = db.query(User).filter(User.email == credentials.email).first()
     if not user or not verify_password(credentials.password, user.hashed_password):
-        raise HTTPException(status_code = 401, detail = "Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not user.is_verified:
-        raise HTTPException(status_code = 403, detail = "Please verify your email first")
+        raise HTTPException(status_code=403, detail="Please verify your email first")
 
     access_token = create_access_token({"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
-

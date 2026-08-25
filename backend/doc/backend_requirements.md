@@ -73,7 +73,7 @@ All rows below are **implemented** unless marked otherwise.
 | Implemented | POST | `/api/projects/{project_id}/tasks` |
 | Implemented | GET | `/api/projects/{project_id}/tasks` |
 | Implemented | GET | `/api/projects/{project_id}/tasks/{task_id}` |
-| Implemented | PUT | `/api/projects/{project_id}/tasks/{task_id}` |
+| Implemented | PATCH | `/api/projects/{project_id}/tasks/{task_id}` |
 | Implemented | DELETE | `/api/projects/{project_id}/tasks/{task_id}` |
 | Implemented | POST | `/api/projects/{project_id}/labels` |
 | Implemented | GET | `/api/projects/{project_id}/labels` |
@@ -405,9 +405,9 @@ Member.
 
 **Errors:** **404** `"Project not found"` / `"Task not found"`
 
-#### `PUT /api/projects/{project_id}/tasks/{task_id}`
+#### `PATCH /api/projects/{project_id}/tasks/{task_id}`
 
-Member. Partial update despite PUT (`exclude_unset`). Fields: `title`, `description`, `status`, `priority`, `due_date`, `assignee_id` (not reporter).
+Member. Partial update (`exclude_unset`). Fields: `title`, `description`, `status`, `priority`, `due_date`, `assignee_id` (not reporter).
 
 **200:** `TaskOut`
 

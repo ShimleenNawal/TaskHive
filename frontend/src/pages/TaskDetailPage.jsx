@@ -129,7 +129,7 @@ export default function TaskDetailPage() {
 
   const updateTaskMutation = useMutation({
     mutationFn: async (data) => {
-      const res = await client.put(`/projects/${projectId}/tasks/${taskId}`, {
+      const res = await client.patch(`/projects/${projectId}/tasks/${taskId}`, {
         title: data.title,
         description: data.description || null,
         status: data.status,
