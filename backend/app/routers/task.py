@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import nulls_last
+from sqlalchemy import case, nulls_last
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.deps import require_project_member, get_task_in_project
@@ -20,11 +20,24 @@ from app.schemas.label import LabelSummary
 
 router = APIRouter(tags=["tasks"])
 
+# Rank enums by workflow meaning, not alphabetical string order.
+PRIORITY_ORDER = case(
+    (Task.priority == "HIGH", 1),
+    (Task.priority == "MEDIUM", 2),
+    (Task.priority == "LOW", 3),
+    else_=4,
+)
+
+STATUS_ORDER = case(
+    (Task.status == "TODO", 1),
+    (Task.status == "IN_PROGRESS", 2),
+    (Task.status == "DONE", 3),
+    else_=4,
+)
+
 SORT_FIELDS = {
     "due_date": Task.due_date,
     "created_at": Task.created_at,
-    "priority": Task.priority,
-    "status": Task.status,
     "title": Task.title,
 }
 
@@ -140,6 +153,10 @@ def list_tasks(
 
     if sort == "due_date":
         query = query.order_by(nulls_last(Task.due_date.asc()))
+    elif sort == "priority":
+        query = query.order_by(PRIORITY_ORDER.asc())
+    elif sort == "status":
+        query = query.order_by(STATUS_ORDER.asc())
     elif sort:
         query = query.order_by(SORT_FIELDS[sort].asc())
     else:
