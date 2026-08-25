@@ -1,10 +1,14 @@
-import { useAuth } from "../context/AuthContext";
-import { Navigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
-export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+export default function ProtectedRoute() {
+  const { isAuthenticated } = useAuth();
+  const rehydrated = useSelector((state) => state.auth._persist?.rehydrated);
 
-  if (loading) return <p>Loading...</p>;
-  if (!isAuthenticated) return <Navigate to="/login" />;
-  return children;
+  // Wait for Redux Persist so a refresh does not flash the login page
+  if (!rehydrated) return null;
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <Outlet />;
 }

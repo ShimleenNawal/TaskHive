@@ -1,25 +1,27 @@
 from fastapi import Depends
 from fastapi import APIRouter, HTTPException
 from app.core.database import get_db
-from app.core.security import create_access_token, get_current_user
+from app.core.security import create_access_token
+from app.core.email import send_verification_email
 from app.models.user import User 
-from app.schemas.user import UserCreate, UserOut, LoginRequest, LoginResponse
-from app.services.auth_service import hash_password, verify_password 
+from app.schemas.user import UserCreate, UserOut, LoginRequest, LoginResponse, ResendRequest
+from app.services.auth_service import hash_password, verify_password
+from app.core.config import settings 
 import secrets
-from datetime import datetime, timedelta 
+from datetime import datetime, timedelta, timezone 
  
 
 router = APIRouter(prefix = "/auth", tags = ["auth"])
 
 @router.post("/signup", response_model = UserOut)
-def signup(user_data: UserCreate, db = Depends(get_db)):
+async def signup(user_data: UserCreate, db = Depends(get_db)):
     # Check if email already exists in db
     if db.query(User).filter(User.email == user_data.email).first(): 
         raise HTTPException(status_code = 409, detail = "Email already exists")
 
     # Otherwise, create user
     verification_token = secrets.token_urlsafe(32)
-    token_expires_at = datetime.now() + timedelta(hours=24)
+    token_expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS)
 
     new_user = User(
         name = user_data.name,
@@ -33,6 +35,11 @@ def signup(user_data: UserCreate, db = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user) 
+
+    await send_verification_email(
+    user_data.email,
+    verification_token,
+    )
     return new_user
 
 @router.get("/verify")
@@ -41,7 +48,7 @@ def verify_email(token: str, db = Depends(get_db)):
     if not user:
         raise HTTPException(status_code = 404, detail = "Token not found")
 
-    if datetime.now() > user.token_expires_at:
+    if datetime.now(timezone.utc) > user.token_expires_at:
             raise HTTPException(status_code = 400, detail = "Token expired")
 
     user.is_verified = True
@@ -51,9 +58,8 @@ def verify_email(token: str, db = Depends(get_db)):
     return {"status": "verified"}
 
 @router.post("/resend-verification")
-def resend_verification(body: dict, db = Depends(get_db)):
-    email = body.get("email")
-    user = db.query(User).filter(User.email == email).first() 
+async def resend_verification(body: ResendRequest, db = Depends(get_db)):
+    user = db.query(User).filter(User.email == body.email).first() 
     if not user:
         raise HTTPException(status_code = 404, detail = "User not found")
 
@@ -62,8 +68,12 @@ def resend_verification(body: dict, db = Depends(get_db)):
 
     # Generate new token
     user.verification_token = secrets.token_urlsafe(32)
-    user.token_expires_at = datetime.now() + timedelta(hours=24)
+    user.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.VERIFICATION_TOKEN_EXPIRE_HOURS)
     db.commit()
+    await send_verification_email(
+    user.email,
+    user.verification_token,
+    )
     return {"status": "new token sent"}
 
 @router.post("/login", response_model = LoginResponse)
@@ -78,6 +88,3 @@ def login(credentials: LoginRequest, db = Depends(get_db)):
     access_token = create_access_token({"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.get("/users", response_model = UserOut)
-def get_profile(current_user: User = Depends(get_current_user)):
-    return current_user

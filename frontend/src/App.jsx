@@ -1,47 +1,53 @@
-import { useEffect, useState } from "react";
 import "./App.css";
-import client from "./api/client";
-import { AuthProvider } from "./context/AuthContext";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
+  useParams,
 } from "react-router-dom";
+
 import SignupPage from "./pages/SignupPage";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ProjectsPage from "./pages/ProjectsPage";
+import CreateProjectPage from "./pages/CreateProjectPage";
+import ProjectDetailPage from "./pages/ProjectDetailPage";
+import ProjectTasksPage from "./pages/ProjectTasksPage";
+import TaskDetailPage from "./pages/TaskDetailPage";
+import ProjectLabelsPage from "./pages/ProjectLabelsPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
+import AuthSessionBootstrap from "./components/AuthSessionBootstrap";
+
+function TaskDetailRoute() {
+  const { taskId } = useParams();
+  return <TaskDetailPage key={taskId} />;
+}
 
 export default function App() {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    client
-      .get("/")
-      .then((r) => console.log("Backend response:", r.data))
-      .catch((e) => console.log("Error:", e.response?.status));
-  }, []);
-
   return (
-    <AuthProvider>
-      <div>
-        <Router>
-          <Routes>
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <DashboardPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/" element={<Navigate to="/signup" />} />
-          </Routes>
-        </Router>
-      </div>
-    </AuthProvider>
+    <Router>
+      <AuthSessionBootstrap />
+      <Routes>
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<Navigate to="/signup" replace />} />
+        <Route path="/verify" element={<VerifyEmailPage />} />
+
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/projects/new" element={<CreateProjectPage />} />
+          <Route path="/projects/:id" element={<ProjectDetailPage />} />
+          <Route path="/projects/:id/tasks" element={<ProjectTasksPage />} />
+          <Route
+            path="/projects/:id/tasks/:taskId"
+            element={<TaskDetailRoute />}
+          />
+          <Route path="/projects/:id/labels" element={<ProjectLabelsPage />} />
+        </Route>
+      </Routes>
+    </Router>
   );
 }
