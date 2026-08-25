@@ -8,8 +8,13 @@ import { projectSchema, inviteSchema } from "@/schemas/projectSchema";
 import { useAuth } from "@/hooks/useAuth";
 import client from "@/api/client";
 import ErrorBanner from "@/components/ErrorBanner";
-import { formatDateShort, getApiError } from "@/lib/utils";
-import { queryKeys } from "@/api/queryKeys";
+import {
+  datetimeLocalToIso,
+  formatDateShort,
+  getApiError,
+  toDatetimeLocalValue,
+} from "@/lib/utils";
+import { authQueryKey, queryKeys } from "@/api/queryKeys";
 import { fetchProject, fetchUsers } from "@/api/queries";
 
 export default function ProjectDetailPage() {
@@ -26,8 +31,9 @@ export default function ProjectDetailPage() {
     isLoading,
     error: projectError,
   } = useQuery({
-    queryKey: queryKeys.projects.detail(id),
+    queryKey: authQueryKey(queryKeys.projects.detail(id), user?.id),
     queryFn: () => fetchProject(id),
+    enabled: Boolean(user?.id),
   });
 
   const isOwner = user?.id === project?.owner_id;
@@ -36,9 +42,9 @@ export default function ProjectDetailPage() {
     data: users = [],
     isLoading: loadingUsers,
   } = useQuery({
-    queryKey: queryKeys.users.all,
+    queryKey: authQueryKey(queryKeys.users.all, user?.id),
     queryFn: fetchUsers,
-    enabled: Boolean(isOwner),
+    enabled: Boolean(isOwner && user?.id),
   });
 
   const {
@@ -64,9 +70,7 @@ export default function ProjectDetailPage() {
     resetProject({
       name: project.name || "",
       description: project.description || "",
-      deadline: project.deadline
-        ? new Date(project.deadline).toISOString().slice(0, 16)
-        : "",
+      deadline: toDatetimeLocalValue(project.deadline),
     });
   }, [project, resetProject]);
 
@@ -75,12 +79,14 @@ export default function ProjectDetailPage() {
       const response = await client.patch(`/projects/${id}`, {
         name: data.name,
         description: data.description || null,
-        deadline: data.deadline ? new Date(data.deadline).toISOString() : null,
+        deadline: datetimeLocalToIso(data.deadline),
       });
       return response.data;
     },
     onSuccess: (updated) => {
-      queryClient.setQueryData(queryKeys.projects.detail(id), (current) => ({
+      queryClient.setQueryData(
+        authQueryKey(queryKeys.projects.detail(id), user?.id),
+        (current) => ({
         ...current,
         ...updated,
       }));
@@ -107,7 +113,10 @@ export default function ProjectDetailPage() {
       return fetchProject(id);
     },
     onSuccess: (fresh) => {
-      queryClient.setQueryData(queryKeys.projects.detail(id), fresh);
+      queryClient.setQueryData(
+        authQueryKey(queryKeys.projects.detail(id), user?.id),
+        fresh,
+      );
       resetInvite();
     },
     onError: (err) => setError(getApiError(err, "Failed to invite member")),
@@ -119,7 +128,9 @@ export default function ProjectDetailPage() {
       return userId;
     },
     onSuccess: (userId) => {
-      queryClient.setQueryData(queryKeys.projects.detail(id), (current) => ({
+      queryClient.setQueryData(
+        authQueryKey(queryKeys.projects.detail(id), user?.id),
+        (current) => ({
         ...current,
         members: current.members.filter((member) => member.user_id !== userId),
       }));

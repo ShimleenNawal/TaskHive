@@ -10,9 +10,14 @@ import LabelChip from "@/components/LabelChip";
 import { TaskPriorityBadge, TaskStatusBadge } from "@/components/TaskBadges";
 import { taskSchema } from "@/schemas/taskSchema";
 import { commentSchema } from "@/schemas/commentSchema";
-import { formatDate, getApiError } from "@/lib/utils";
+import {
+  datetimeLocalToIso,
+  formatDate,
+  getApiError,
+  toDatetimeLocalValue,
+} from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { queryKeys } from "@/api/queryKeys";
+import { authQueryKey, queryKeys } from "@/api/queryKeys";
 import {
   fetchComments,
   fetchLabels,
@@ -31,9 +36,15 @@ export default function TaskDetailPage() {
   const [selectedLabelId, setSelectedLabelId] = useState("");
   const [editingCommentId, setEditingCommentId] = useState(null);
 
-  const taskKey = queryKeys.tasks.detail(projectId, taskId);
-  const commentsKey = queryKeys.comments.list(projectId, taskId);
-  const labelsKey = queryKeys.labels.list(projectId);
+  const taskKey = authQueryKey(
+    queryKeys.tasks.detail(projectId, taskId),
+    user?.id,
+  );
+  const commentsKey = authQueryKey(
+    queryKeys.comments.list(projectId, taskId),
+    user?.id,
+  );
+  const labelsKey = authQueryKey(queryKeys.labels.list(projectId), user?.id);
 
   const {
     register,
@@ -66,21 +77,25 @@ export default function TaskDetailPage() {
   const taskQuery = useQuery({
     queryKey: taskKey,
     queryFn: () => fetchTask(projectId, taskId),
+    enabled: Boolean(user?.id),
   });
 
   const projectQuery = useQuery({
-    queryKey: queryKeys.projects.detail(projectId),
+    queryKey: authQueryKey(queryKeys.projects.detail(projectId), user?.id),
     queryFn: () => fetchProject(projectId),
+    enabled: Boolean(user?.id),
   });
 
   const labelsQuery = useQuery({
     queryKey: labelsKey,
     queryFn: () => fetchLabels(projectId),
+    enabled: Boolean(user?.id),
   });
 
   const commentsQuery = useQuery({
     queryKey: commentsKey,
     queryFn: () => fetchComments(projectId, taskId),
+    enabled: Boolean(user?.id),
   });
 
   const task = taskQuery.data;
@@ -100,9 +115,7 @@ export default function TaskDetailPage() {
       description: task.description || "",
       status: task.status,
       priority: task.priority,
-      due_date: task.due_date
-        ? new Date(task.due_date).toISOString().slice(0, 16)
-        : "",
+      due_date: toDatetimeLocalValue(task.due_date),
       assignee_id: task.assignee_id ? String(task.assignee_id) : "",
     });
   }, [task, reset]);
@@ -121,7 +134,7 @@ export default function TaskDetailPage() {
         description: data.description || null,
         status: data.status,
         priority: data.priority,
-        due_date: data.due_date ? new Date(data.due_date).toISOString() : null,
+        due_date: datetimeLocalToIso(data.due_date),
         assignee_id: data.assignee_id ? Number(data.assignee_id) : null,
       });
       return res.data;

@@ -13,8 +13,13 @@ import ErrorBanner from "@/components/ErrorBanner";
 import { TaskPriorityBadge, TaskStatusBadge } from "@/components/TaskBadges";
 import TaskKanbanBoard from "@/components/TaskKanbanBoard";
 import { taskSchema } from "@/schemas/taskSchema";
-import { formatDateShort, getApiError } from "@/lib/utils";
-import { queryKeys } from "@/api/queryKeys";
+import {
+  datetimeLocalToIso,
+  formatDateShort,
+  getApiError,
+} from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { authQueryKey, queryKeys } from "@/api/queryKeys";
 import {
   buildTaskListParams,
   fetchLabels,
@@ -26,6 +31,7 @@ export default function ProjectTasksPage() {
   const { id: projectId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -43,7 +49,10 @@ export default function ProjectTasksPage() {
     () => buildTaskListParams({ view, filters }),
     [view, filters],
   );
-  const tasksQueryKey = queryKeys.tasks.list(projectId, taskParams);
+  const tasksQueryKey = authQueryKey(
+    queryKeys.tasks.list(projectId, taskParams),
+    user?.id,
+  );
 
   const {
     register,
@@ -63,18 +72,21 @@ export default function ProjectTasksPage() {
   });
 
   const projectQuery = useQuery({
-    queryKey: queryKeys.projects.detail(projectId),
+    queryKey: authQueryKey(queryKeys.projects.detail(projectId), user?.id),
     queryFn: () => fetchProject(projectId),
+    enabled: Boolean(user?.id),
   });
 
   const tasksQuery = useQuery({
     queryKey: tasksQueryKey,
     queryFn: () => fetchTasks(projectId, taskParams),
+    enabled: Boolean(user?.id),
   });
 
   const labelsQuery = useQuery({
-    queryKey: queryKeys.labels.list(projectId),
+    queryKey: authQueryKey(queryKeys.labels.list(projectId), user?.id),
     queryFn: () => fetchLabels(projectId),
+    enabled: Boolean(user?.id),
   });
 
   const project = projectQuery.data;
@@ -92,7 +104,7 @@ export default function ProjectTasksPage() {
         description: data.description || null,
         status: data.status,
         priority: data.priority,
-        due_date: data.due_date ? new Date(data.due_date).toISOString() : null,
+        due_date: datetimeLocalToIso(data.due_date),
         assignee_id: data.assignee_id ? Number(data.assignee_id) : null,
       });
     },

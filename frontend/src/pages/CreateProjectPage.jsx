@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { projectSchema } from "@/schemas/projectSchema";
 import client from "@/api/client";
 import ErrorBanner from "@/components/ErrorBanner";
-import { getApiError } from "@/lib/utils";
+import { datetimeLocalToIso, getApiError } from "@/lib/utils";
 import { queryKeys } from "@/api/queryKeys";
 
 export default function CreateProjectPage() {
@@ -33,7 +33,7 @@ export default function CreateProjectPage() {
       const response = await client.post("/projects", {
         name: data.name,
         description: data.description || null,
-        deadline: data.deadline ? new Date(data.deadline).toISOString() : null,
+        deadline: datetimeLocalToIso(data.deadline),
       });
       return response.data;
     },
