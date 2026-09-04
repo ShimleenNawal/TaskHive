@@ -78,10 +78,11 @@ membership is represented by a separate join table with a unique
 
 
 ### Prerequisites
-
+- Python 3.13+
 - Docker Desktop with Docker Compose v2
 - Git
 - For host-based frontend development: Node.js 20.19+ or 22.12+
+- Windows Subsystem for Linux (for Windows OS)
 
 
 
@@ -97,11 +98,13 @@ cp frontend/.env.example frontend/.env
 Replace `SECRET_KEY` in `backend/.env` with a strong local value. For example:
 
 ```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+python3 -c "import secrets; print(secrets.token_urlsafe(48))" (use "python" not "python3" for Windows OS)
 ```
 
 The example database credentials are development-only and match
 `docker-compose.yml`.
+
+Ensure you have a Docker account and Docker Desktop is running.
 
 ### 2. Start the application
 
@@ -142,8 +145,7 @@ This is the shortest path through the implemented functionality:
 1. Start the Docker stack and open the web application.
 2. Register the first user.
 3. Open MailHog and inspect the TaskHive verification email.
-4. Copy the token from the email link and visit
-  `http://localhost:8000/api/auth/verify?token=<token>`.
+4. Click the token link from the email `http://localhost:5174/verify?token=<token>`.
 5. Log in and create a project with an optional description and deadline.
 6. Register and verify a second user in a separate browser profile.
 7. As the first user, open the project and add the second user as a member.
