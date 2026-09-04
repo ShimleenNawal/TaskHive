@@ -18,6 +18,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _as_utc(dt: datetime | None) -> datetime | None:
+    """Normalize DB datetimes that may be naive (TIMESTAMP WITHOUT TIME ZONE)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 @router.post("/signup", response_model=UserOut)
 async def signup(user_data: UserCreate, db=Depends(get_db)):
     # Check if email already exists in db
@@ -62,7 +71,8 @@ def verify_email(token: str, db=Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="Token not found")
 
-    if datetime.now(timezone.utc) > user.token_expires_at:
+    expires_at = _as_utc(user.token_expires_at)
+    if expires_at is None or datetime.now(timezone.utc) > expires_at:
         raise HTTPException(status_code=400, detail="Token expired")
 
     user.is_verified = True
