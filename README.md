@@ -217,6 +217,7 @@ Backend settings are loaded from `backend/.env`.
 - `ALGORITHM`: JWT signing algorithm
 - `TOKEN_EXPIRE_HOURS`: access-token lifetime
 - `VERIFICATION_TOKEN_EXPIRE_HOURS`: email-verification token lifetime
+- `LOGIN_LINK_EXPIRE_MINUTES`: one-time sign-in (forgot-password) link lifetime, default `15`
 
 The frontend expects:
 

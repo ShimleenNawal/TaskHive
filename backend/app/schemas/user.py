@@ -38,6 +38,16 @@ class LoginResponse(BaseModel):
 class ResendRequest(BaseModel): 
     email: EmailStr
 
+class EmailLookupRequest(BaseModel):
+    email: EmailStr
+
+class CheckEmailResponse(BaseModel):
+    exists: bool
+    is_verified: bool | None = None
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
 class UserListOut(BaseModel):
     id: int
     name: str

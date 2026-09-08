@@ -13,4 +13,6 @@ class User(Base):
     is_verified = Column(Boolean, default=False, nullable=False, server_default="false")
     verification_token = Column(String, nullable = True) # needs to be emailed 
     token_expires_at = Column(DateTime(timezone=True), nullable = True) # when token expires 
-    created_at = Column(DateTime(timezone=True), default = func.now()) # auto-timestamp on creation 
+    login_link_token = Column(String, nullable=True, index=True)  # one-time sign-in link
+    login_link_expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default = func.now()) # auto-timestamp on creation
