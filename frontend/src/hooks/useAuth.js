@@ -13,16 +13,17 @@ export function useAuth() {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const user = useSelector(selectUser);
 
-  const login = async (email, password) => {
-    const res = await client.post("/auth/login", { email, password });
-    const accessToken = res.data.access_token;
-
-    // Store token first so the interceptor can authorize /users/me
+  const completeLogin = async (accessToken) => {
     dispatch(setCredentials({ accessToken, user: null }));
     await resetQueryCache();
 
     const userRes = await client.get("/users/me");
     dispatch(setCredentials({ accessToken, user: userRes.data }));
+  };
+
+  const login = async (email, password) => {
+    const res = await client.post("/auth/login", { email, password });
+    await completeLogin(res.data.access_token);
   };
 
   const logout = async () => {
@@ -38,12 +39,37 @@ export function useAuth() {
     return await client.post("/auth/resend-verification", { email });
   };
 
+  const checkEmail = async (email) => {
+    const res = await client.post("/auth/check-email", { email });
+    return res.data;
+  };
+
+  const forgotPassword = async (email) => {
+    const res = await client.post("/auth/forgot-password", { email });
+    return res.data;
+  };
+
+  const verifyEmail = async (token) => {
+    const res = await client.get("/auth/verify", { params: { token } });
+    return res.data;
+  };
+
+  const emailLogin = async (token) => {
+    const res = await client.get("/auth/email-login", { params: { token } });
+    await completeLogin(res.data.access_token);
+  };
+
   return {
     isAuthenticated,
     user,
+    completeLogin,
     login,
     logout,
     signup,
     resendVerification,
+    checkEmail,
+    forgotPassword,
+    verifyEmail,
+    emailLogin,
   };
 }

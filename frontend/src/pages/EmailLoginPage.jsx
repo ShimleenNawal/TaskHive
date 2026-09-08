@@ -22,12 +22,12 @@ function formatErrorDetail(detail) {
   return null;
 }
 
-export default function VerifyEmailPage() {
+export default function EmailLoginPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { verifyEmail, completeLogin } = useAuth();
+  const { emailLogin } = useAuth();
 
-  const [status, setStatus] = useState("verifying");
+  const [status, setStatus] = useState("signing-in");
   const [message, setMessage] = useState("");
 
   const token = searchParams.get("token");
@@ -36,7 +36,7 @@ export default function VerifyEmailPage() {
     const run = async () => {
       if (!token) {
         setStatus("error");
-        setMessage("Verification token is missing.");
+        setMessage("Sign-in link is missing.");
         return;
       }
 
@@ -44,58 +44,46 @@ export default function VerifyEmailPage() {
       startedTokens.add(token);
 
       try {
-        const data = await verifyEmail(token);
-        if (!data?.access_token) {
-          throw new Error("Unexpected response from the server. Please try again.");
-        }
-
-        await completeLogin(data.access_token);
+        await emailLogin(token);
         setStatus("success");
-        setMessage("Your email has been verified. Opening your dashboard…");
+        setMessage("Signed in. Opening your dashboard…");
         navigate("/dashboard", { replace: true });
       } catch (error) {
         startedTokens.delete(token);
         const detail = formatErrorDetail(error.response?.data?.detail);
         setStatus("error");
         setMessage(
-          detail || error.message || "Email verification failed.",
+          detail || error.message || "Sign-in link is invalid or expired.",
         );
       }
     };
 
     void run();
-    // Intentionally once per token; auth helpers are stable enough for this flow.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per token
   }, [token]);
 
   return (
     <AuthLayout>
       <div className="text-center">
-        {status === "verifying" && (
+        {status === "signing-in" && (
           <>
-            <h1 className="text-2xl font-bold text-[#2F3329]">
-              Verifying your email...
-            </h1>
+            <h1 className="text-2xl font-bold text-[#2F3329]">Signing you in…</h1>
             <p className="mt-3 text-sm text-[#5c6356]">
-              Please wait while we verify your email address.
+              Please wait while we complete your secure sign-in.
             </p>
           </>
         )}
 
         {status === "success" && (
           <>
-            <h1 className="text-2xl font-bold text-[#3d4536]">
-              Email Verified!
-            </h1>
+            <h1 className="text-2xl font-bold text-[#3d4536]">Welcome back</h1>
             <p className="mt-3 text-sm text-[#5c6356]">{message}</p>
           </>
         )}
 
         {status === "error" && (
           <>
-            <h1 className="text-2xl font-bold text-red-700">
-              Verification Failed
-            </h1>
+            <h1 className="text-2xl font-bold text-red-700">Sign-in failed</h1>
             <p className="mt-3 text-sm text-[#5c6356]">{message}</p>
 
             <Button

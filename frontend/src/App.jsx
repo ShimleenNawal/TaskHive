@@ -18,6 +18,7 @@ import ProjectTasksPage from "./pages/ProjectTasksPage";
 import TaskDetailPage from "./pages/TaskDetailPage";
 import ProjectLabelsPage from "./pages/ProjectLabelsPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
+import EmailLoginPage from "./pages/EmailLoginPage";
 import AuthSessionBootstrap from "./components/AuthSessionBootstrap";
 
 function TaskDetailRoute() {
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<Navigate to="/signup" replace />} />
         <Route path="/verify" element={<VerifyEmailPage />} />
+        <Route path="/email-login" element={<EmailLoginPage />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
