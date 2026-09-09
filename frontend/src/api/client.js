@@ -22,10 +22,13 @@ client.interceptors.response.use(
     const url = error.config?.url || "";
 
     const isAuthRequest =
-      url.includes("/api/auth/login") ||
-      url.includes("/api/auth/signup") ||
-      url.includes("/api/auth/verify") ||
-      url.includes("/api/auth/resend-verification");
+      url.includes("/auth/login") ||
+      url.includes("/auth/signup") ||
+      url.includes("/auth/verify") ||
+      url.includes("/auth/resend-verification") ||
+      url.includes("/auth/check-email") ||
+      url.includes("/auth/forgot-password") ||
+      url.includes("/auth/email-login");
 
     if (status === 401 && !isAuthRequest) {
       void resetQueryCache();

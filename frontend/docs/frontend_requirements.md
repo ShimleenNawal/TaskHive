@@ -14,7 +14,7 @@ It is derived from [`docs/PROJECT_REQUIREMENTS.md`](../../docs/PROJECT_REQUIREME
 
 | Topic | Product doc | Backend | Frontend today |
 |---|---|---|---|
-| Signup, verify email, login | Implemented | Implemented | **Implemented** |
+| Signup, verify email (auto-login), login, check-email, forgot-password magic links | Implemented | Implemented | **Implemented** |
 | Dashboard | Implemented | Stats API added | **Implemented** (live stats) |
 | Projects CRUD + members | Implemented | Implemented | **Implemented** |
 | Tasks list, create, update, delete | Implemented | Implemented | **Implemented** |
@@ -80,13 +80,19 @@ Auth JWT + user remain in Redux (not React Query).
 
 **Background revalidation:** `AuthSessionBootstrap` quietly calls `GET /users/me` after rehydrate. On success it refreshes `user`. On **401** the axios interceptor clears credentials and redirects; on transient/network/5xx errors the persisted session is kept unchanged.
 
-**Login (`hooks/useAuth.js`):** `POST /auth/login` → `setCredentials` with token → `resetQueryCache()` → `GET /users/me` → `setCredentials` with token + user (then persisted).
+**Login (`hooks/useAuth.js`):** `POST /auth/login` → `completeLogin(accessToken)` → `setCredentials` with token → `resetQueryCache()` → `GET /users/me` → `setCredentials` with token + user (then persisted). The same `completeLogin` path is used after verify and magic email-login.
 
 **Logout:** `resetQueryCache()` (cancel in-flight fetches + clear cache) then `clearCredentials()` in Redux (persist writes the cleared session), then navigate to `/login`. Query keys are also scoped by user id so a new session never reads another user's cache entries. No server revoke endpoint (matches backend).
 
-**Signup:** `POST /auth/signup`; user is prompted to verify email (no auto-login).
+**Signup:** `POST /auth/signup`; user is prompted to verify email (no auto-login on signup itself).
 
-**Email verification:** `/verify?token=…` page calls `GET /auth/verify?token=…`. Unverified login shows resend flow via `POST /auth/resend-verification`.
+**Interactive email check (Login):** on blur and debounced change (valid email shape), `POST /auth/check-email`. Unknown → “Email does not exist” (submit disabled); exists + unverified → verify prompt; exists + verified → clear status errors.
+
+**Forgot Password (Login only):** `POST /auth/forgot-password` with the entered email. Unverified → verification email; verified → magic sign-in email. No Change Password link on auth pages.
+
+**Email verification:** `/verify?token=…` calls `GET /auth/verify?token=…`, which returns a JWT; `completeLogin` then navigates to `/dashboard` (not `/login`).
+
+**Magic email login:** `/email-login?token=…` calls `GET /auth/email-login?token=…` → `completeLogin` → `/dashboard`.
 
 **Theme:** Still uses a separate `localStorage` key `theme` (unrelated to auth).
 
@@ -101,7 +107,7 @@ Auth JWT + user remain in Redux (not React Query).
 
 - Injects `Authorization: Bearer <token>` from `store.getState().auth.accessToken`.
 - On **401** for non-auth endpoints: dispatches `clearCredentials()` and redirects to `/login`.
-- Auth endpoints (`/auth/login`, `/auth/signup`, `/auth/verify`, `/auth/resend-verification`) are excluded from auto-redirect so login errors display inline.
+- Auth endpoints (`/auth/login`, `/auth/signup`, `/auth/verify`, `/auth/resend-verification`, `/auth/check-email`, `/auth/forgot-password`, `/auth/email-login`) are excluded from auto-redirect so auth errors display inline.
 
 ### Error handling
 
@@ -128,9 +134,10 @@ Datetime-local forms use these helpers so pre-fill and submit both use local wal
 | Path | Page | Auth | Description |
 |---|---|---|---|
 | `/` | redirect | — | Redirects to `/signup` |
-| `/signup` | `SignupPage` | Public | Register new account |
-| `/login` | `LoginPage` | Public | Login; handles unverified email + resend |
-| `/verify` | `VerifyEmailPage` | Public | Email verification from link token |
+| `/signup` | `SignupPage` | Public | Register new account (AuthLayout; no Forgot/Change links) |
+| `/login` | `LoginPage` | Public | Login; interactive email check; Forgot Password? magic link; unverified + resend |
+| `/verify` | `VerifyEmailPage` | Public | Email verification from link → JWT → dashboard |
+| `/email-login` | `EmailLoginPage` | Public | Magic sign-in from forgot-password link → JWT → dashboard |
 | `/dashboard` | `DashboardPage` | Protected | Welcome, theme toggle, live task stats, quick actions |
 | `/projects` | `ProjectsPage` | Protected | Grid of user’s projects |
 | `/projects/new` | `CreateProjectPage` | Protected | Create project form |
@@ -263,11 +270,15 @@ Datetime-local forms use these helpers so pre-fill and submit both use local wal
 
 ### Auth pages
 
-**Signup (`SignupPage.jsx`):** name, email, password → signup → prompt to check email.
+Shared shell: `AuthLayout` — warm stone → muted olive full-viewport gradient, centered elevated card, olive-charcoal CTAs.
 
-**Login (`LoginPage.jsx`):** email, password. On 403 unverified, shows resend verification option.
+**Signup (`SignupPage.jsx`):** Name / Email / Password with required `*` labels; password rule hint (≥8 chars, ≥1 letter, ≥1 digit); no Forgot / Change links → signup → “check your email” → link to Login only.
 
-**Verify email (`VerifyEmailPage.jsx`):** reads `token` query param, calls verify endpoint, shows success/error.
+**Login (`LoginPage.jsx`):** Email / Password with required `*`. Interactive `POST /auth/check-email` on blur/debounce. Small-font **Forgot Password?** only (prefills entered email via `POST /auth/forgot-password`). On 403 unverified, shows verify prompt + optional resend.
+
+**Verify email (`VerifyEmailPage.jsx`):** reads `token` query param, calls verify, `completeLogin`, navigates to `/dashboard`.
+
+**Email login (`EmailLoginPage.jsx`):** reads `token`, calls email-login, `completeLogin`, navigates to `/dashboard`.
 
 ---
 
@@ -276,6 +287,7 @@ Datetime-local forms use these helpers so pre-fill and submit both use local wal
 | Component | File | Purpose |
 |---|---|---|
 | `ProtectedRoute` | `components/ProtectedRoute.jsx` | Auth gate for nested routes |
+| `AuthLayout` | `components/AuthLayout.jsx` | Shared auth page shell (gradient + card) |
 | `ErrorBanner` | `components/ErrorBanner.jsx` | Red alert for API/validation errors |
 | `LabelChip` | `components/LabelChip.jsx` | Pill showing label name on colored background |
 | `TaskStatusBadge` | `components/TaskBadges.jsx` | Colored badge for TODO / IN_PROGRESS / DONE |
@@ -306,10 +318,13 @@ Every **implemented** backend endpoint (per `backend/doc/backend_requirements.md
 | Method | Path | Frontend usage |
 |---|---|---|
 | POST | `/auth/signup` | SignupPage |
-| GET | `/auth/verify` | VerifyEmailPage |
+| GET | `/auth/verify` | VerifyEmailPage → JWT → dashboard |
 | POST | `/auth/resend-verification` | LoginPage |
+| POST | `/auth/check-email` | LoginPage (interactive lookup) |
+| POST | `/auth/forgot-password` | LoginPage (Forgot Password?) |
+| GET | `/auth/email-login` | EmailLoginPage → JWT → dashboard |
 | POST | `/auth/login` | `useAuth().login` |
-| GET | `/users/me` | Post-login only (no refresh bootstrap) |
+| GET | `/users/me` | `completeLogin` / AuthSessionBootstrap |
 | GET | `/users/` | ProjectDetailPage invite dropdown |
 | POST | `/projects` | CreateProjectPage |
 | GET | `/projects` | ProjectsPage |
@@ -346,7 +361,12 @@ Every **implemented** backend endpoint (per `backend/doc/backend_requirements.md
 flowchart TD
   signup["/signup"] --> verify["/verify"]
   login["/login"] --> dashboard["/dashboard"]
-  verify --> login
+  login -->|check-email| login
+  login -->|Forgot Password| forgot["forgot-password email"]
+  forgot -->|unverified| verify
+  forgot -->|verified| emailLogin["/email-login"]
+  verify -->|JWT| dashboard
+  emailLogin -->|JWT| dashboard
   dashboard --> projects["/projects"]
   dashboard --> newProject["/projects/new"]
   projects --> projectDetail["/projects/:id"]
@@ -382,8 +402,9 @@ Non-members never reach project routes with valid data; backend returns 404 for 
 ## Styling and UX conventions
 
 - **Layout:** Full-width pages with max-width containers (`max-w-4xl` … `max-w-7xl`), consistent header bars with back/actions.
+- **Auth shell:** Signup / login / verify / email-login use `AuthLayout` with stone→olive gradient (`#EDE6DC` → `#C9D0BE`) and olive-charcoal CTAs (not the global purple/cream clichés).
 - **Theme:** Light default; dark mode via `dark:` Tailwind classes and `localStorage.theme`.
-- **Cards:** Rounded borders, gray-50 / gray-900 backgrounds for content sections.
+- **Cards:** Rounded borders, gray-50 / gray-900 backgrounds for content sections (app pages; auth uses `AuthLayout` card).
 - **Destructive actions:** Confirm dialogs (`window.confirm`) before delete (project, task, label, comment, member).
 - **Loading:** Page-level “Loading…” text; task list uses separate initial load vs. filter refresh states.
 
@@ -401,10 +422,10 @@ frontend/src/
 ├── store/
 │   ├── index.js               # configureStore + redux-persist
 │   └── authSlice.js           # accessToken + user
-├── hooks/useAuth.js           # login / logout / signup helpers
+├── hooks/useAuth.js           # login / logout / signup / checkEmail / forgotPassword / completeLogin
 ├── components/
+│   ├── AuthLayout.jsx            # auth gradient shell
 │   ├── AuthSessionBootstrap.jsx  # background /users/me after rehydrate
-│   ├── ProtectedRoute.jsx
 │   ├── ProtectedRoute.jsx
 │   ├── ErrorBanner.jsx
 │   ├── LabelChip.jsx
@@ -421,6 +442,7 @@ frontend/src/
     ├── SignupPage.jsx
     ├── LoginPage.jsx
     ├── VerifyEmailPage.jsx
+    ├── EmailLoginPage.jsx
     ├── DashboardPage.jsx
     ├── ProjectsPage.jsx
     ├── CreateProjectPage.jsx
@@ -452,8 +474,8 @@ These match backend out-of-scope items; there is **no frontend work** for them:
 - Nested comment threads / replies
 - File attachments on tasks or comments
 - Activity feed or audit log UI
-- In-app notifications or email beyond verification
-- Password reset flow
+- In-app notifications
+- Change Password / public reset-password forms (Forgot Password uses magic email links; Change Password planned in-app later)
 - Pagination (lists load full collections)
 - Dedicated `/users/me` profile settings page
 - Role management beyond owner vs. member
