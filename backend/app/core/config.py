@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     ALGORITHM: str
     TOKEN_EXPIRE_HOURS: int
     VERIFICATION_TOKEN_EXPIRE_HOURS: int
+    LOGIN_LINK_EXPIRE_MINUTES: int 
 
     class Config:
         env_file = ".env"

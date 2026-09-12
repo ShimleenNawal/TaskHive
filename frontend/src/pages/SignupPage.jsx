@@ -5,6 +5,8 @@ import { z } from "zod";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/hooks/useAuth";
+import AuthLayout from "@/components/AuthLayout";
+import PasswordInput from "@/components/PasswordInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -49,99 +51,114 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 px-4">
-      <div className="w-full max-w-md p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-        {signupSuccess ? (
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-green-600">
-              Check your email.
-            </h1>
+    <AuthLayout title={signupSuccess ? undefined : "Sign Up"}>
+      {signupSuccess ? (
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-[#3d4536]">Check your email.</h1>
 
-            <p className="mt-3 text-gray-600 dark:text-gray-400">
-              We sent a verification link to your email address. Please verify
-              your email before logging in.
+          <p className="mt-3 text-sm text-[#5c6356]">
+            We sent a verification link to your email address. Please verify
+            your email before logging in.
+          </p>
+
+          <Button
+            type="button"
+            className="auth-submit mt-6 w-full"
+            onClick={() => navigate("/login")}
+          >
+            Go to Login
+          </Button>
+        </div>
+      ) : (
+        <>
+          {error && (
+            <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div>
+              <label
+                htmlFor="signup-name"
+                className="mb-1.5 block text-sm font-medium text-[#2F3329]"
+              >
+                Name <span className="auth-required">*</span>
+              </label>
+              <Input
+                id="signup-name"
+                {...register("name")}
+                type="text"
+                placeholder="Full Name"
+                autoComplete="name"
+              />
+              {errors.name && (
+                <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="signup-email"
+                className="mb-1.5 block text-sm font-medium text-[#2F3329]"
+              >
+                Email <span className="auth-required">*</span>
+              </label>
+              <Input
+                id="signup-email"
+                {...register("email")}
+                type="email"
+                placeholder="Email"
+                autoComplete="email"
+              />
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.email.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="signup-password"
+                className="mb-1.5 block text-sm font-medium text-[#2F3329]"
+              >
+                Password <span className="auth-required">*</span>
+              </label>
+              <PasswordInput
+                id="signup-password"
+                {...register("password")}
+                placeholder="Password"
+                autoComplete="new-password"
+              />
+              {errors.password && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.password.message}
+                </p>
+              )}
+            </div>
+
+            <p className="auth-hint text-center">
+              Password must contain at least 8 characters, 1 letter &amp; 1 digit
             </p>
 
             <Button
-              type="button"
-              className="mt-6 w-full"
-              onClick={() => navigate("/login")}
+              type="submit"
+              className="auth-submit w-full"
+              disabled={loading}
             >
-              Go to Login
+              {loading ? "Signing up..." : "Sign Up"}
             </Button>
-          </div>
-        ) : (
-          <>
-            <h1 className="text-2xl font-bold mb-6 text-black dark:text-white">
-              Sign Up
-            </h1>
+          </form>
 
-            {error && (
-              <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded">
-                {error}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div>
-                <Input
-                  {...register("name")}
-                  type="text"
-                  placeholder="Full Name"
-                  autoComplete="name"
-                />
-                {errors.name && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.name.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Input
-                  {...register("email")}
-                  type="email"
-                  placeholder="Email"
-                  autoComplete="email"
-                />
-                {errors.email && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.email.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Input
-                  {...register("password")}
-                  type="password"
-                  placeholder="Password"
-                  autoComplete="new-password"
-                />
-                {errors.password && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.password.message}
-                  </p>
-                )}
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Signing up..." : "Sign Up"}
-              </Button>
-            </form>
-
-            <p className="mt-4 text-center text-gray-600 dark:text-gray-400">
-              Already have an account?{" "}
-              <Link
-                to="/login"
-                className="text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                Log in
-              </Link>
-            </p>
-          </>
-        )}
-      </div>
-    </div>
+          <p className="mt-4 text-center text-sm text-[#5c6356]">
+            Already have an account?{" "}
+            <Link to="/login" className="font-medium underline-offset-2 hover:underline">
+              Log in
+            </Link>
+          </p>
+        </>
+      )}
+    </AuthLayout>
   );
 }

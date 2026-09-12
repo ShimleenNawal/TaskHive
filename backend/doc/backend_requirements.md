@@ -15,7 +15,7 @@ It is derived from [`docs/PROJECT_REQUIREMENTS.md`](../../docs/PROJECT_REQUIREME
 | Part 1 (auth, users, projects, members, task CRUD) | Implemented | Implemented |
 | Get one task + list filters `assignee_id`, `reporter_id`, `label_id` | Marked planned / “not yet” | **Implemented** |
 | Labels, task-label tagging, comments, dashboard | Marked planned / “do not build” | **Implemented** |
-| Nested replies, attachments, activity log, notifications, soft deletes, password reset | Out of scope | **Not implemented (by design)** |
+| Nested replies, attachments, activity log, notifications, soft deletes, password reset forms | Out of scope | **Not implemented (by design)** — Forgot Password uses magic email links instead; Change Password is a future in-app feature |
 
 Routers: [`app/routers/routes.py`](../app/routers/routes.py) includes `auth`, `user`, `project`, `task`, `label`, `comment`, `dashboard`.
 
@@ -60,6 +60,9 @@ All rows below are **implemented** unless marked otherwise.
 | Implemented | POST | `/api/auth/signup` |
 | Implemented | GET | `/api/auth/verify` |
 | Implemented | POST | `/api/auth/resend-verification` |
+| Implemented | POST | `/api/auth/check-email` |
+| Implemented | POST | `/api/auth/forgot-password` |
+| Implemented | GET | `/api/auth/email-login` |
 | Implemented | POST | `/api/auth/login` |
 | Implemented | GET | `/api/users/me` |
 | Implemented | GET | `/api/users/` |
@@ -86,7 +89,7 @@ All rows below are **implemented** unless marked otherwise.
 | Implemented | PATCH | `/api/projects/{project_id}/tasks/{task_id}/comments/{comment_id}` |
 | Implemented | DELETE | `/api/projects/{project_id}/tasks/{task_id}/comments/{comment_id}` |
 | Implemented | GET | `/api/dashboard/stats` |
-| Out of scope | — | Nested comments, attachments, activity, notifications, soft delete, password reset |
+| Out of scope | — | Nested comments, attachments, activity, notifications, soft delete, public reset-password / Change Password forms (Change Password planned in-app later) |
 
 There is no logout/revoke endpoint (logout is client-side). There is no separate list-members endpoint; use project detail `members`.
 
@@ -98,9 +101,13 @@ SQLAlchemy models: `User`, `Project`, `ProjectMember`, `Task`, `Label`, `TaskLab
 
 Migration `a1b2c3d4e5f6` adds `projects.updated_at`, `project_members.created_at`, task `reporter_id` / `updated_at` / `description` as Text, plus `labels`, `task_labels`, `comments`.
 
+Migration `c2d3e4f5a6b7` converts `users.token_expires_at` and `users.created_at` to `timestamptz`.
+
+Migration `d3e4f5a6b7c8` adds `users.login_link_token` and `users.login_link_expires_at` for magic sign-in links.
+
 | Table | Key fields |
 |---|---|
-| `users` | `id`, `name`, `email` (unique), `hashed_password`, `is_verified`, `verification_token`, `token_expires_at`, `created_at` |
+| `users` | `id`, `name`, `email` (unique), `hashed_password`, `is_verified`, `verification_token`, `token_expires_at`, `login_link_token`, `login_link_expires_at`, `created_at` |
 | `projects` | `id`, `name`, `description`, `owner_id`, `deadline`, `created_at`, `updated_at` |
 | `project_members` | `id`, `project_id` CASCADE, `user_id`, `role` (`OWNER` \| `MEMBER`), `created_at`; unique `(project_id, user_id)` |
 | `tasks` | `id`, `project_id` CASCADE, `title`, `description` (Text), `due_date`, `status`, `priority`, `assignee_id` SET NULL, `reporter_id` RESTRICT NOT NULL, `created_at`, `updated_at` |
@@ -259,7 +266,9 @@ Auth: none.
 
 Auth: none.
 
-**200:** `{ "status": "verified" }`
+Marks the user verified, clears verification token fields, and issues a JWT so the client can open the dashboard without a separate login.
+
+**200:** `{ "status": "verified", "access_token": "<jwt>", "token_type": "bearer" }`
 
 **Errors:** **404** `"Token not found"` · **400** `"Token expired"` · **422** missing token
 
@@ -269,7 +278,40 @@ Auth: none.
 
 **200:** `{ "status": "new token sent" }`
 
-**Errors:** **404** `"User not found"` · **409** `"User already verified"` · **422**
+**Errors:** **404** `"User not found"` · **409** `"User already verified"` · **429** rate limited · **503** SMTP failure · **422**
+
+#### `POST /api/auth/check-email`
+
+Auth: none. Used by Login for interactive email lookup (product allows existence enumeration).
+
+**Body:** `{ "email" }`
+
+**200:**
+- Unknown: `{ "exists": false, "is_verified": null }`
+- Known: `{ "exists": true, "is_verified": true | false }`
+
+**Errors:** **422**
+
+#### `POST /api/auth/forgot-password`
+
+Auth: none. Sends a magic email link (no public reset-password form). Rate-limited per email. Verification links use `VERIFICATION_TOKEN_EXPIRE_HOURS`; sign-in links use `LOGIN_LINK_EXPIRE_MINUTES` (default 15).
+
+**Body:** `{ "email" }`
+
+**Behavior:**
+- Unknown email → **404** `"Email does not exist"`
+- Unverified user → new `verification_token` + verification email → `{FRONTEND_URL}/verify?token=…` → **200** `{ "status": "verification email sent" }`
+- Verified user → new `login_link_token` + sign-in email → `{FRONTEND_URL}/email-login?token=…` → **200** `{ "status": "sign-in email sent" }`
+
+**Errors:** **404** · **429** rate limited · **503** SMTP failure after known user · **422**
+
+#### `GET /api/auth/email-login?token=`
+
+Auth: none. Consumes a one-time magic sign-in link for a **verified** user.
+
+**200:** `{ "access_token": "<jwt>", "token_type": "bearer" }` (clears `login_link_token` / `login_link_expires_at`)
+
+**Errors:** **400** `"Invalid or expired sign-in link"` · **422** missing token
 
 #### `POST /api/auth/login`
 
@@ -280,6 +322,8 @@ Auth: none.
 **Errors:** **401** `"Invalid credentials"` · **403** `"Please verify your email first"` · **422**
 
 No server-side logout.
+
+**Note:** Change Password / public reset-password forms are **not** implemented on auth pages; Change Password is planned as a future **in-app** (e.g. settings) feature. Forgot Password uses the magic-link flows above.
 
 ---
 
@@ -521,7 +565,7 @@ Auth: Bearer. Counts tasks in projects where the caller is a member.
 
 | Product requirement | Backend status |
 |---|---|
-| Signup / verify / resend / login JWT | Implemented |
+| Signup / verify (JWT) / resend / check-email / forgot-password / email-login / login JWT | Implemented |
 | Profile + verified user list | Implemented |
 | Project CRUD + owner membership | Implemented |
 | Invite/remove members | Implemented |
@@ -533,7 +577,7 @@ Auth: Bearer. Counts tasks in projects where the caller is a member.
 | Tag / untag | Implemented |
 | Flat comments + owner moderate delete | Implemented |
 | Dashboard counts | Implemented |
-| Nested replies, files, activity, notifications, soft delete, password reset | Out of scope — **not** a gap |
+| Nested replies, files, activity, notifications, soft delete, Change Password / reset-password forms | Out of scope — **not** a gap (Forgot Password = magic links; Change Password later in-app) |
 
 **Contract notes (not missing features):**
 

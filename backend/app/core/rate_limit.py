@@ -24,3 +24,6 @@ class CooldownLimiter:
 
 # One verification email per address per minute.
 resend_verification_limiter = CooldownLimiter(cooldown_seconds=60)
+
+# One forgot-password / magic-link email per address per minute.
+forgot_password_limiter = CooldownLimiter(cooldown_seconds=20)
