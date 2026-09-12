@@ -153,16 +153,16 @@ def check_email(body: EmailLookupRequest, db=Depends(get_db)):
 
 @router.post("/forgot-password")
 async def forgot_password(body: ForgotPasswordRequest, db=Depends(get_db)):
-    user = db.query(User).filter(User.email == body.email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Email does not exist")
-
     email_key = body.email.strip().lower()
     if not forgot_password_limiter.is_allowed(email_key):
         raise HTTPException(
             status_code=429,
             detail="Please wait before requesting another email",
         )
+
+    user = db.query(User).filter(User.email == body.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Email does not exist")
 
     if not user.is_verified:
         user.verification_token = secrets.token_urlsafe(32)
